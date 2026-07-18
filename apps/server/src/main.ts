@@ -8,6 +8,7 @@ import { AppModule } from "./app.module.js";
 import { readRuntimeConfig } from "./config/runtime-config.js";
 
 async function bootstrap(): Promise<void> {
+  process.umask(0o077);
   const config = readRuntimeConfig();
   const logger = new Logger("Bootstrap");
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -17,6 +18,14 @@ async function bootstrap(): Promise<void> {
   app.disable("x-powered-by");
   app.useBodyParser("json", { limit: "64kb" });
   app.useBodyParser("urlencoded", { limit: "16kb", extended: false });
+  app.use(
+    "/api",
+    (_request: Request, response: Response, next: NextFunction) => {
+      response.setHeader("Cache-Control", "no-store");
+      response.setHeader("Pragma", "no-cache");
+      next();
+    },
+  );
   app.use(
     helmet({
       contentSecurityPolicy: {

@@ -25,6 +25,10 @@ try {
     container,
     "--publish",
     "127.0.0.1::3000",
+    "--cap-drop",
+    "ALL",
+    "--security-opt",
+    "no-new-privileges:true",
     "--env",
     `ORKESTR_ADMIN_PASSWORD=${password}`,
     "--mount",
@@ -40,6 +44,17 @@ try {
     (await run("docker", ["exec", container, "id", "-un"])).stdout.trim(),
     "orkestr",
   );
+  const processSecurity = (
+    await run("docker", [
+      "exec",
+      container,
+      "sh",
+      "-c",
+      "grep -E '^(CapEff|NoNewPrivs):' /proc/1/status",
+    ])
+  ).stdout;
+  assert.match(processSecurity, /CapEff:\s+0{16}/);
+  assert.match(processSecurity, /NoNewPrivs:\s+1/);
   await assertLogin(port);
 
   const firstCommit = (
@@ -61,6 +76,19 @@ try {
     "-s",
     "/data/orkestr.sqlite",
   ]);
+  const privateModes = (
+    await run("docker", [
+      "exec",
+      container,
+      "stat",
+      "-c",
+      "%a",
+      "/data",
+      "/data/codex",
+      "/data/orkestr.sqlite",
+    ])
+  ).stdout.trim();
+  assert.equal(privateModes, "700\n700\n600");
 
   const demoTest = await run(
     "docker",

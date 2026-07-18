@@ -25,7 +25,7 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "test:integration": "node --test test/integration/browser-mission.test.mjs",
+    "test:integration": "node --test --test-concurrency=1 test/integration/*.test.mjs",
     "test:browser": "npm run build && playwright test",
     "test:docker": "node test/smoke/docker-smoke.mjs",
     "audit": "npm audit && npm audit --omit=dev",

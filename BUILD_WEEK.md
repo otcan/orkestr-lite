@@ -57,12 +57,12 @@ workspace diff, and runs the repaired demo tests in a separate process.
 - `npm run format:check` — passed
 - `npm run build` — passed; Angular production bundle is 291.72 kB raw
 - `npm test` — passed; SQLite WAL/replay and app-server JSONL lifecycle covered
-- `npm run test:integration` — passed; browser mission fixes the bounded demo bug and all 3 tests pass
+- `npm run test:integration` — passed; browser mission fixes the bounded demo bug, all 3 demo tests pass, and HTTP/session/private-data security boundaries are exercised
 - `npm run test:browser` — passed; Chromium covers login, setup readiness, mission creation, live activity, completion, and logout
 - `npm audit` and `npm audit --omit=dev` — 0 vulnerabilities
 - `docker build --tag orkestr-lite:smoke .` — passed
 - clean local image — built successfully; the published release digest is recorded during the release-candidate freeze
-- clean anonymous volumes — readiness passed before and after restart, image health is `healthy`, runtime user is `orkestr`, authentication remains functional, and the seeded Git workspace persists with the expected failing test
+- clean anonymous volumes — readiness passed before and after restart, image health is `healthy`, runtime user is `orkestr`, effective capabilities are zero, `no-new-privileges` is active, private data modes are enforced, authentication remains functional, and the seeded Git workspace persists with the expected failing test
 - clean-clone Compose quick start — passed with loopback-only port publishing, forwarded administrator-password override, persistent data/workspace volumes, healthy restart, and no duplicate init process
 
 The fixture is deterministic test infrastructure, not evidence of a live GPT-5.6

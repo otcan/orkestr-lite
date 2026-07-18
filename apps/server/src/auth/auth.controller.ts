@@ -75,6 +75,7 @@ export class AuthController {
   @Post("logout")
   @HttpCode(204)
   logout(@Res({ passthrough: true }) response: Response): void {
+    this.auth.revokeSessions();
     response.clearCookie("orkestr_session", { path: "/" });
   }
 

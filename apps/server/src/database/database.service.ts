@@ -6,8 +6,8 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { chmodSync, mkdirSync } from "node:fs";
+import { dirname, isAbsolute, relative } from "node:path";
 import { RUNTIME_CONFIG } from "../config/config.module.js";
 import type { RuntimeConfig } from "../config/runtime-config.js";
 import { migrations } from "./migrations.js";
@@ -25,14 +25,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    mkdirSync(dirname(this.config.databasePath), {
-      recursive: true,
-      mode: 0o700,
-    });
-    mkdirSync(this.config.codexHome, { recursive: true, mode: 0o700 });
+    ensurePrivateDirectory(this.config.home);
+    const databaseDirectory = dirname(this.config.databasePath);
+    mkdirSync(databaseDirectory, { recursive: true, mode: 0o700 });
+    if (isWithin(this.config.home, databaseDirectory)) {
+      ensurePrivateDirectory(databaseDirectory);
+    }
+    ensurePrivateDirectory(this.config.codexHome);
     mkdirSync(this.config.workspace, { recursive: true, mode: 0o750 });
 
     const db = new Database(this.config.databasePath);
+    chmodSync(this.config.databasePath, 0o600);
     this.connection = db;
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
@@ -98,4 +101,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       );
     }
   }
+}
+
+function ensurePrivateDirectory(path: string): void {
+  if (dirname(path) === path) {
+    throw new Error(
+      `Refusing to use a filesystem root as private data: ${path}`,
+    );
+  }
+  mkdirSync(path, { recursive: true, mode: 0o700 });
+  chmodSync(path, 0o700);
+}
+
+function isWithin(parent: string, child: string): boolean {
+  const path = relative(parent, child);
+  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
 }

@@ -15,6 +15,7 @@ const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000;
 export class AuthService implements OnModuleInit {
   private readonly logger = new Logger(AuthService.name);
   private sessionSecret = "";
+  private sessionGeneration = 0;
 
   constructor(
     private readonly database: DatabaseService,
@@ -26,15 +27,28 @@ export class AuthService implements OnModuleInit {
       this.database.getSetting("session_secret") ??
       randomBytes(32).toString("base64url");
     this.database.setSetting("session_secret", this.sessionSecret);
+    this.sessionGeneration = Number(
+      this.database.getSetting("session_generation") ?? "0",
+    );
+    if (
+      !Number.isSafeInteger(this.sessionGeneration) ||
+      this.sessionGeneration < 0
+    ) {
+      this.sessionGeneration = 0;
+    }
 
     if (this.config.adminPassword) {
-      this.storePassword(this.config.adminPassword);
+      if (!this.verifyPassword(this.config.adminPassword)) {
+        this.storePassword(this.config.adminPassword);
+        this.revokeSessions();
+      }
       return;
     }
 
     if (!this.database.getSetting("admin_password_hash")) {
       const generated = randomBytes(18).toString("base64url");
       this.storePassword(generated);
+      this.revokeSessions();
       this.logger.warn(
         "Generated first-run administrator password. Save it now:",
       );
@@ -58,9 +72,13 @@ export class AuthService implements OnModuleInit {
   createSession(): { token: string; csrfToken: string; expiresAt: string } {
     const expiresAt = Date.now() + SESSION_LIFETIME_MS;
     const nonce = randomBytes(16).toString("base64url");
-    const payload = Buffer.from(JSON.stringify({ expiresAt, nonce })).toString(
-      "base64url",
-    );
+    const payload = Buffer.from(
+      JSON.stringify({
+        expiresAt,
+        nonce,
+        generation: this.sessionGeneration,
+      }),
+    ).toString("base64url");
     const signature = this.sign(payload);
     const token = `${payload}.${signature}`;
     return {
@@ -83,9 +101,12 @@ export class AuthService implements OnModuleInit {
         Buffer.from(payload, "base64url").toString("utf8"),
       ) as {
         expiresAt?: number;
+        generation?: number;
       };
       return (
-        typeof decoded.expiresAt === "number" && decoded.expiresAt > Date.now()
+        typeof decoded.expiresAt === "number" &&
+        decoded.expiresAt > Date.now() &&
+        decoded.generation === this.sessionGeneration
       );
     } catch {
       return false;
@@ -106,6 +127,14 @@ export class AuthService implements OnModuleInit {
 
   createCsrfForExistingSession(sessionToken: string): string | null {
     return this.verifySession(sessionToken) ? this.csrfFor(sessionToken) : null;
+  }
+
+  revokeSessions(): void {
+    this.sessionGeneration += 1;
+    this.database.setSetting(
+      "session_generation",
+      String(this.sessionGeneration),
+    );
   }
 
   private storePassword(password: string): void {

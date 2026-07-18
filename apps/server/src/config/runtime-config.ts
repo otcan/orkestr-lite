@@ -21,6 +21,15 @@ export function readRuntimeConfig(): RuntimeConfig {
   const workspace = resolve(process.env.ORKESTR_WORKSPACE ?? "./workspace");
   const host = process.env.ORKESTR_HOST ?? "127.0.0.1";
   const port = parsePort(process.env.ORKESTR_PORT);
+  const adminPassword = process.env.ORKESTR_ADMIN_PASSWORD || undefined;
+  if (
+    adminPassword &&
+    (adminPassword.length < 12 || adminPassword.length > 512)
+  ) {
+    throw new Error(
+      "ORKESTR_ADMIN_PASSWORD must contain between 12 and 512 characters",
+    );
+  }
   const allowedOrigins = (process.env.ORKESTR_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map((value) => value.trim())
@@ -36,7 +45,7 @@ export function readRuntimeConfig(): RuntimeConfig {
       process.env.ORKESTR_DATABASE ?? `${home}/orkestr.sqlite`,
     ),
     requestedModel: process.env.ORKESTR_MODEL ?? "gpt-5.6",
-    adminPassword: process.env.ORKESTR_ADMIN_PASSWORD,
+    adminPassword,
     cookieSecure: process.env.ORKESTR_COOKIE_SECURE === "true",
     allowedOrigins,
     codexCommand: process.env.ORKESTR_CODEX_COMMAND ?? "codex",
