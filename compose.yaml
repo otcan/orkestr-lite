@@ -1,6 +1,6 @@
 services:
   orkestr:
-    image: ghcr.io/otcan/orkestr-lite:latest
+    image: "${ORKESTR_IMAGE:-ghcr.io/otcan/orkestr-lite:v0.1.0-build-week}"
     build:
       context: .
     ports:

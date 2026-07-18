@@ -6,15 +6,21 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "../..");
 const suffix = `${process.pid}-${Date.now()}`;
-const image = `orkestr-lite:smoke-${suffix}`;
+const suppliedImage = process.env.ORKESTR_SMOKE_IMAGE?.trim();
+const image = suppliedImage || `orkestr-lite:smoke-${suffix}`;
 const container = `orkestr-lite-smoke-${suffix}`;
 const dataVolume = `orkestr-lite-smoke-data-${suffix}`;
 const workspaceVolume = `orkestr-lite-smoke-workspace-${suffix}`;
 const password = `smoke-${suffix}`;
 
 try {
-  console.log(`Building ${image}`);
-  await run("docker", ["build", "--tag", image, "."]);
+  if (suppliedImage) {
+    console.log(`Testing published image ${image}`);
+    await run("docker", ["pull", image]);
+  } else {
+    console.log(`Building ${image}`);
+    await run("docker", ["build", "--tag", image, "."]);
+  }
   await run("docker", ["volume", "create", dataVolume]);
   await run("docker", ["volume", "create", workspaceVolume]);
 
@@ -196,7 +202,9 @@ async function cleanup() {
   await run("docker", ["volume", "rm", dataVolume, workspaceVolume], {
     allowFailure: true,
   });
-  await run("docker", ["image", "rm", image], { allowFailure: true });
+  if (!suppliedImage) {
+    await run("docker", ["image", "rm", image], { allowFailure: true });
+  }
 }
 
 async function run(command, args, options = {}) {

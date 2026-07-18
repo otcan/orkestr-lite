@@ -8,6 +8,15 @@ This Build Week release intentionally focuses on the complete browser mission lo
 
 ## Quick start
 
+Use the immutable published image from the current GitHub release to start without rebuilding:
+
+```bash
+docker compose pull
+docker compose up -d --no-build
+```
+
+See [RELEASE.md](RELEASE.md) for the exact-digest command and release verification. To build the checked-out source instead, run:
+
 ```bash
 docker compose up --build
 ```

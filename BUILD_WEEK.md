@@ -82,6 +82,8 @@ and the primary Codex thread's `/feedback` ID here.
 
 See [HACKATHON.md](HACKATHON.md) for the release and submission checklist.
 
+The immutable tag, image, provenance, smoke test, and amendment process are defined in [RELEASE.md](RELEASE.md). The GitHub release notes record the final source commit and image digest.
+
 ## Known limitations
 
 - The initial implementation targets Linux AMD64.
