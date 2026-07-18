@@ -180,6 +180,7 @@ export class MissionDetailComponent implements OnInit, OnDestroy {
   private readonly busyState = signal(false);
   private readonly connectedState = signal(false);
   private eventSource: EventSource | null = null;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly id: string;
 
   constructor(
@@ -235,6 +236,7 @@ export class MissionDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.eventSource?.close();
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
   }
 
   async interrupt(): Promise<void> {
@@ -328,8 +330,16 @@ export class MissionDetailComponent implements OnInit, OnDestroy {
           [...this.events, event].sort((left, right) => left.id - right.id),
         );
       }
-      void this.refresh();
+      this.scheduleRefresh();
     });
+  }
+
+  private scheduleRefresh(): void {
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      void this.refresh();
+    }, 100);
   }
 
   private async refresh(): Promise<void> {

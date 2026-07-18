@@ -20,7 +20,7 @@ import type {
 } from "@orkestr/codex-client";
 import { RUNTIME_CONFIG } from "../config/config.module.js";
 import type { RuntimeConfig } from "../config/runtime-config.js";
-import { CodexService } from "../codex/codex.service.js";
+import { CodexService, type CodexExitDetails } from "../codex/codex.service.js";
 import { MissionEventBus } from "./mission-event.bus.js";
 import { MissionRepository } from "./mission.repository.js";
 
@@ -57,6 +57,8 @@ export class MissionsService implements OnModuleInit {
       this.handleNotification(notification),
     );
     this.codex.onServerRequest((request) => this.handleServerRequest(request));
+    this.codex.onExit((details) => this.handleCodexExit(details));
+    this.codex.onReady(() => queueMicrotask(() => void this.processNext()));
     queueMicrotask(() => void this.processNext());
   }
 
@@ -174,7 +176,12 @@ export class MissionsService implements OnModuleInit {
   }
 
   private async processNext(): Promise<void> {
-    if (this.dispatching || this.activeMissionId) return;
+    if (
+      this.dispatching ||
+      this.activeMissionId ||
+      this.codex.snapshot().process !== "ready"
+    )
+      return;
     const next = this.repository.nextQueued();
     if (!next) return;
     this.dispatching = true;
@@ -183,15 +190,22 @@ export class MissionsService implements OnModuleInit {
       await this.startMission(next);
     } catch (error) {
       const message = errorMessage(error);
-      this.logger.error(`Mission ${next.id} failed to start: ${message}`);
-      this.repository.update(next.id, {
-        status: "failed",
-        error: message,
-        finishedAt: new Date().toISOString(),
-      });
-      this.repository.appendEvent(next.id, "mission.failed", {
-        error: message,
-      });
+      const current = this.repository.find(next.id);
+      if (current?.status === "interrupted") {
+        this.logger.warn(
+          `Mission ${next.id} start aborted after interruption: ${message}`,
+        );
+      } else {
+        this.logger.error(`Mission ${next.id} failed to start: ${message}`);
+        this.repository.update(next.id, {
+          status: "failed",
+          error: message,
+          finishedAt: new Date().toISOString(),
+        });
+        this.repository.appendEvent(next.id, "mission.failed", {
+          error: message,
+        });
+      }
       this.activeMissionId = null;
       queueMicrotask(() => void this.processNext());
     } finally {
@@ -201,6 +215,7 @@ export class MissionsService implements OnModuleInit {
 
   private async startMission(mission: MissionRecord): Promise<void> {
     const model = mission.requestedModel ?? this.codex.selectedModel();
+    let effectiveModel = mission.effectiveModel ?? model;
     this.repository.update(mission.id, {
       status: "starting",
       startedAt: mission.startedAt ?? new Date().toISOString(),
@@ -210,7 +225,9 @@ export class MissionsService implements OnModuleInit {
 
     let threadId = mission.codexThreadId;
     if (threadId) {
-      await this.codex.resumeThread(threadId);
+      const thread = await this.codex.resumeThread(threadId);
+      effectiveModel = thread.thread.model ?? effectiveModel;
+      this.repository.update(mission.id, { effectiveModel });
       this.repository.appendEvent(mission.id, "codex.thread_resumed", {
         threadId,
       });
@@ -220,9 +237,10 @@ export class MissionsService implements OnModuleInit {
         model,
       });
       threadId = thread.thread.id;
+      effectiveModel = thread.thread.model ?? model;
       this.repository.update(mission.id, {
         codexThreadId: threadId,
-        effectiveModel: thread.thread.model ?? model,
+        effectiveModel,
       });
       this.repository.appendEvent(mission.id, "codex.thread_started", {
         threadId,
@@ -239,11 +257,13 @@ export class MissionsService implements OnModuleInit {
       cwd: mission.workspace,
       model,
     });
+    effectiveModel =
+      this.repository.find(mission.id)?.effectiveModel ?? effectiveModel;
     this.repository.update(mission.id, {
       status: "running",
       codexThreadId: threadId,
       codexTurnId: turn.turn.id,
-      effectiveModel: model,
+      effectiveModel,
     });
     this.repository.appendEvent(mission.id, "codex.turn_started", {
       threadId,
@@ -341,6 +361,38 @@ export class MissionsService implements OnModuleInit {
       method: request.method,
       params: sanitizePayload(request.params),
     });
+  }
+
+  private handleCodexExit(details: CodexExitDetails): void {
+    const mission = this.activeMissionId
+      ? this.repository.find(this.activeMissionId)
+      : (this.repository.active()[0] ?? null);
+    if (
+      !mission ||
+      !["starting", "running", "awaiting_approval"].includes(mission.status)
+    ) {
+      this.activeMissionId = null;
+      return;
+    }
+
+    this.repository.update(mission.id, {
+      status: "interrupted",
+      finishedAt: new Date().toISOString(),
+      interruptionMetadata: {
+        reason: "codex_app_server_exit",
+        previousStatus: mission.status,
+        code: details.code,
+        signal: details.signal,
+      },
+    });
+    this.repository.appendEvent(mission.id, "mission.interrupted", {
+      reason: "codex_app_server_exit",
+      previousStatus: mission.status,
+      code: details.code,
+      signal: details.signal,
+      resumable: mission.codexThreadId !== null,
+    });
+    this.activeMissionId = null;
   }
 
   private finishActive(missionId: string): void {

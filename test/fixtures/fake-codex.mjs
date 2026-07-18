@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import readline from "node:readline";
 
 if (process.argv.includes("--version")) {
@@ -10,6 +10,7 @@ if (process.argv.includes("--version")) {
 const input = readline.createInterface({ input: process.stdin });
 const threads = new Map();
 let sequence = 0;
+let turnCount = 0;
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -54,13 +55,15 @@ input.on("line", (line) => {
       break;
     case "thread/start": {
       const threadId = `thr_fixture_${++sequence}`;
+      const threadModel =
+        process.env.ORKESTR_FAKE_CODEX_THREAD_MODEL ?? message.params.model;
       threads.set(threadId, {
         cwd: message.params.cwd,
-        model: message.params.model,
+        model: threadModel,
       });
       send({
         id: message.id,
-        result: { thread: { id: threadId, model: message.params.model } },
+        result: { thread: { id: threadId, model: threadModel } },
       });
       break;
     }
@@ -71,14 +74,35 @@ input.on("line", (line) => {
       });
       break;
     case "turn/start": {
+      turnCount += 1;
       const thread = threads.get(message.params.threadId) ?? {
         cwd: message.params.cwd,
       };
       const turnId = `turn_fixture_${++sequence}`;
+      const rerouteModel = process.env.ORKESTR_FAKE_CODEX_REROUTE_MODEL;
+      const rerouteTurn = Number(
+        process.env.ORKESTR_FAKE_CODEX_REROUTE_ON_TURN ?? "1",
+      );
+      if (rerouteModel && turnCount === rerouteTurn) {
+        send({
+          method: "model/rerouted",
+          params: {
+            threadId: message.params.threadId,
+            fromModel: thread.model,
+            toModel: rerouteModel,
+          },
+        });
+      }
       send({
         id: message.id,
         result: { turn: { id: turnId, status: "inProgress", items: [] } },
       });
+      const crashMarker = process.env.ORKESTR_FAKE_CODEX_CRASH_ONCE_MARKER;
+      if (crashMarker && !existsSync(crashMarker)) {
+        writeFileSync(crashMarker, "crashed\n", { mode: 0o600 });
+        setTimeout(() => process.exit(42), 25);
+        break;
+      }
       setTimeout(
         () => completeFixtureTurn(message.params.threadId, turnId, thread.cwd),
         15,

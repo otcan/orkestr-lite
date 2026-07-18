@@ -27,6 +27,13 @@ const execFileAsync = promisify(execFile);
 interface CodexServiceEvents {
   notification: [notification: CodexNotification];
   serverRequest: [request: CodexServerRequest];
+  ready: [];
+  exit: [details: CodexExitDetails];
+}
+
+export interface CodexExitDetails {
+  code: number | null;
+  signal: NodeJS.Signals | null;
 }
 
 export interface CodexStatus {
@@ -114,6 +121,16 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
   onServerRequest(listener: (request: CodexServerRequest) => void): () => void {
     this.events.on("serverRequest", listener);
     return () => this.events.off("serverRequest", listener);
+  }
+
+  onReady(listener: () => void): () => void {
+    this.events.on("ready", listener);
+    return () => this.events.off("ready", listener);
+  }
+
+  onExit(listener: (details: CodexExitDetails) => void): () => void {
+    this.events.on("exit", listener);
+    return () => this.events.off("exit", listener);
   }
 
   async startDeviceLogin(): Promise<DeviceCodeLoginResult> {
@@ -230,15 +247,20 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
       );
       client.on("stderr", (line) => this.logger.debug(line));
       client.on("exit", (code, signal) => {
+        if (this.client === client) this.client = null;
         this.status.process = "error";
         this.status.processError = `Codex app-server exited (${code ?? signal ?? "unknown"})`;
-        if (!this.shuttingDown) this.scheduleRestart();
+        if (!this.shuttingDown) {
+          this.events.emit("exit", { code, signal });
+          this.scheduleRestart();
+        }
       });
       await client.start();
       this.client = client;
       this.status.process = "ready";
       await this.refreshAccountAndModels();
       this.logger.log(`Codex app-server ${cliVersion} ready`);
+      this.events.emit("ready");
     } catch (error) {
       this.status.process = "error";
       this.status.processError = errorMessage(error);
