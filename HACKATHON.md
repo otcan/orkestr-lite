@@ -32,7 +32,7 @@ The Devpost rules and organizer updates are authoritative if any summary in this
 - [ ] Primary Codex implementation thread `/feedback` session ID recorded
 - [ ] English project description finalized
 - [ ] Public YouTube demo shorter than three minutes, with audio explaining Codex and GPT-5.6 usage
-- [ ] Release candidate tag, commit SHA, and image digest recorded
+- [x] Release candidate tag, commit SHA, and image digest recorded
 - [ ] Anonymous judge path verified through the end of judging
 - [ ] Submission confirmation ID and timestamp recorded
 
@@ -40,8 +40,8 @@ The Devpost rules and organizer updates are authoritative if any summary in this
 
 The intended judge path is:
 
-1. Clone the repository on Linux AMD64.
-2. Run `docker compose up --build`.
+1. Clone the `v0.1.0-build-week` tag on Linux AMD64.
+2. Pull and start the immutable image digest from the GitHub release by following [RELEASE.md](RELEASE.md), without rebuilding.
 3. Read the generated administrator password from the logs and open <http://localhost:3000>.
 4. Authenticate Codex, confirm GPT-5.6 readiness, and create a mission.
 5. Observe persisted live activity and the final response in the browser.
@@ -50,6 +50,8 @@ The intended judge path is:
 Use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) for the exact prompt, commands, narration timeline, evidence capture, and recovery rules.
 
 Use [SUBMISSION.md](SUBMISSION.md) for the copy-ready Devpost narrative and the release-only fields that remain to be filled.
+
+Use the source-build command `docker compose up --build` only as a fallback; the published-image path is the verified judge path.
 
 The automated fixture covers the same backend mission lifecycle deterministically. It does not replace the required live GPT-5.6 evidence.
 

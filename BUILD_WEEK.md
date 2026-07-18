@@ -61,7 +61,7 @@ workspace diff, and runs the repaired demo tests in a separate process.
 - `npm run test:browser` — passed; Chromium covers login, setup readiness, mission creation, live activity, completion, and logout
 - `npm audit` and `npm audit --omit=dev` — 0 vulnerabilities
 - `docker build --tag orkestr-lite:smoke .` — passed
-- clean local image — built successfully; the published release digest is recorded during the release-candidate freeze
+- clean local image — built successfully; the frozen published release digest is recorded below
 - clean anonymous volumes — readiness passed before and after restart, image health is `healthy`, runtime user is `orkestr`, effective capabilities are zero, `no-new-privileges` is active, private data modes are enforced, authentication remains functional, and the seeded Git workspace persists with the expected failing test
 - clean-clone Compose quick start — passed with loopback-only port publishing, forwarded administrator-password override, persistent data/workspace volumes, healthy restart, and no duplicate init process
 
@@ -69,6 +69,20 @@ The fixture is deterministic test infrastructure, not evidence of a live GPT-5.6
 challenge-account run. Before submission, add the real authenticated mission ID,
 effective model identifier returned by app-server, changed files, passing output,
 and the primary Codex thread's `/feedback` ID here.
+
+## Frozen Build Week release
+
+- Tag: `v0.1.0-build-week`
+- Source commit: `06f736f569f12a67164a43613f81e740eb36d2cc`
+- GitHub release: <https://github.com/otcan/orkestr-lite/releases/tag/v0.1.0-build-week>
+- Linux AMD64 image: `ghcr.io/otcan/orkestr-lite@sha256:026beb20c20f92b226424ffa32316b7a9b0fe2fb26461aae0d95df3960657e9b`
+- Release workflow: <https://github.com/otcan/orkestr-lite/actions/runs/29642982912>
+- Provenance: GitHub artifact attestation generated and pushed with the image
+- Published-digest smoke: passed health, unprivileged runtime, zero capabilities, `no-new-privileges`, authentication, private data modes, seeded workspace, restart, and persistence checks
+- Anonymous access: the exact digest pulled successfully with a fresh Docker configuration containing no registry credentials
+- Clean-clone judge path: the public tag and digest started with `--no-build`, became healthy, authenticated, preserved the seeded workspace across restart, and were removed cleanly after verification
+
+The tag and container are the immutable competition build. This post-freeze documentation records their evidence only and does not alter the tagged source or image.
 
 ## Required competition artifacts
 

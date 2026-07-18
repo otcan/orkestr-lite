@@ -127,15 +127,19 @@ Codex CLI and app-server, GPT-5.6, TypeScript, Node.js 22, NestJS, Angular 22, S
 - Public YouTube demo: `OWNER INPUT: public URL and verified duration under 3:00`
 - Primary `/feedback` Codex Session ID (ORK-374): `OWNER INPUT: session ID`
 - Live GPT-5.6 evidence (ORK-373): `OWNER INPUT: mission ID, timestamp, requested model, and effective model`
-- Release commit: `OWNER INPUT: frozen release SHA`
-- Published image: `OWNER INPUT: immutable GHCR digest`
+- Release: <https://github.com/otcan/orkestr-lite/releases/tag/v0.1.0-build-week>
+- Release commit: `06f736f569f12a67164a43613f81e740eb36d2cc`
+- Published image: `ghcr.io/otcan/orkestr-lite@sha256:026beb20c20f92b226424ffa32316b7a9b0fe2fb26461aae0d95df3960657e9b`
 
 ## Judge instructions
 
-Clone the frozen release commit, then run:
+On Linux AMD64 with Docker Engine and Compose v2, run:
 
 ```bash
-docker compose up --build
+git clone --branch v0.1.0-build-week --depth 1 https://github.com/otcan/orkestr-lite.git
+cd orkestr-lite
+ORKESTR_IMAGE="ghcr.io/otcan/orkestr-lite@sha256:026beb20c20f92b226424ffa32316b7a9b0fe2fb26461aae0d95df3960657e9b" docker compose pull orkestr
+ORKESTR_IMAGE="ghcr.io/otcan/orkestr-lite@sha256:026beb20c20f92b226424ffa32316b7a9b0fe2fb26461aae0d95df3960657e9b" docker compose up -d --no-build
 ```
 
 Open <http://localhost:3000>, read the generated administrator password from the local container logs, authenticate Codex, and confirm GPT-5.6 readiness. The seeded workspace and exact bounded mission are documented in [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). Inspect the result with:
@@ -145,7 +149,7 @@ docker compose exec orkestr git -C /workspace diff
 docker compose exec orkestr node --test /workspace/test/clamp.test.js
 ```
 
-For the final submission, replace the build command above with the immutable published-image command if the release candidate provides one. Keep the source-build path as a fallback.
+This exact public digest passed the automated release smoke test and a separate anonymous clean-clone start/restart check. Keep `docker compose up --build` as the source-build fallback.
 
 ## Final editor notes
 
