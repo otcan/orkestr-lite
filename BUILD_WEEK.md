@@ -61,7 +61,7 @@ workspace diff, and runs the repaired demo tests in a separate process.
 - `npm run test:browser` — passed; Chromium covers login, setup readiness, mission creation, live activity, completion, and logout
 - `npm audit` and `npm audit --omit=dev` — 0 vulnerabilities
 - `docker build --tag orkestr-lite:smoke .` — passed
-- clean image digest — `sha256:c0934631b5abc66079d9226007a714d685d5325b2c6fef4890ff3551a587f573`
+- clean local image — built successfully; the published release digest is recorded during the release-candidate freeze
 - clean anonymous volumes — readiness passed before and after restart, image health is `healthy`, runtime user is `orkestr`, authentication remains functional, and the seeded Git workspace persists with the expected failing test
 - clean-clone Compose quick start — passed with loopback-only port publishing, forwarded administrator-password override, persistent data/workspace volumes, healthy restart, and no duplicate init process
 
