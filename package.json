@@ -28,7 +28,7 @@
     "test:integration": "node --test test/integration/browser-mission.test.mjs",
     "test:docker": "node test/smoke/docker-smoke.mjs",
     "audit": "npm audit && npm audit --omit=dev",
-    "check": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:integration",
+    "check": "npm run format:check && npm run build && npm run typecheck && npm test && npm run test:integration",
     "check:release": "npm run check && npm run audit && docker compose config --quiet",
     "start": "npm run start -w @orkestr/server"
   },
