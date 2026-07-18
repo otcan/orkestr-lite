@@ -28,6 +28,9 @@ test("runs a persistent browser mission through the complete backend loop", asyn
         ORKESTR_PORT: String(port),
         ORKESTR_ADMIN_PASSWORD: "integration-test-password",
         ORKESTR_CODEX_COMMAND: fakeCodex,
+        ORKESTR_FAKE_CODEX_THREAD_MODEL: "gpt-5.6-effective",
+        ORKESTR_FAKE_CODEX_REROUTE_MODEL: "gpt-5.6-rerouted",
+        ORKESTR_FAKE_CODEX_REROUTE_ON_TURN: "2",
       },
       stdio: ["ignore", "pipe", "pipe"],
     }),
@@ -74,7 +77,8 @@ test("runs a persistent browser mission through the complete backend loop", asyn
       await delay(25);
     }
     assert.equal(mission?.status, "completed", logs);
-    assert.equal(mission.effectiveModel, "gpt-5.6");
+    assert.equal(mission.requestedModel, "gpt-5.6");
+    assert.equal(mission.effectiveModel, "gpt-5.6-effective");
     assert.match(mission.finalResponse, /three tests pass/);
     assert.match(
       await readFile(join(workspace, "src/clamp.js"), "utf8"),
@@ -88,6 +92,29 @@ test("runs a persistent browser mission through the complete backend loop", asyn
       { cwd: workspace, env: testEnvironment },
     );
     assert.match(testResult.stdout, /pass 3/);
+
+    const rerouted = await jsonRequest(port, "/api/missions", cookie, {
+      method: "POST",
+      csrfToken: login.csrfToken,
+      body: {
+        source: "demo",
+        prompt:
+          "Verify model reroute provenance without changing unrelated files.",
+      },
+    });
+    let reroutedMission;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      reroutedMission = await jsonRequest(
+        port,
+        `/api/missions/${rerouted.id}`,
+        cookie,
+      );
+      if (["completed", "failed"].includes(reroutedMission.status)) break;
+      await delay(25);
+    }
+    assert.equal(reroutedMission?.status, "completed", logs);
+    assert.equal(reroutedMission.requestedModel, "gpt-5.6");
+    assert.equal(reroutedMission.effectiveModel, "gpt-5.6-rerouted");
   } finally {
     child.kill("SIGTERM");
     await Promise.race([

@@ -78,6 +78,12 @@ test("runs the complete browser mission experience", async ({ page }) => {
     await expect(page.locator(".final-response")).toContainText(
       "Corrected the reversed clamp bounds",
     );
+    await page.reload();
+    await expect(page.locator(".status-badge.large")).toHaveAttribute(
+      "data-status",
+      "completed",
+    );
+    await expect(page.getByText("Workspace diff updated")).toBeVisible();
     await captureMedia(page, "mission-complete.png");
 
     await page.getByRole("button", { name: "Sign out" }).click();

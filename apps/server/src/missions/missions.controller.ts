@@ -59,23 +59,30 @@ export class MissionsController {
     @Headers("last-event-id") lastEventId: string | undefined,
     @Query("after") after: string | undefined,
   ): Observable<MessageEvent> {
-    const cursor = parseCursor(after ?? lastEventId);
+    let cursor = parseCursor(after ?? lastEventId);
     return new Observable<MessageEvent>((subscriber) => {
+      while (!subscriber.closed) {
+        const replay = this.missions.events(id, cursor);
+        if (replay.length === 0) break;
+        for (const event of replay) {
+          subscriber.next({
+            id: String(event.id),
+            type: "mission-event",
+            data: event,
+          });
+          cursor = event.id;
+        }
+      }
+
       const unsubscribe = this.missions.subscribe((event) => {
         if (event.missionId !== id || event.id <= cursor) return;
+        cursor = event.id;
         subscriber.next({
           id: String(event.id),
           type: "mission-event",
           data: event,
         });
       });
-      for (const event of this.missions.events(id, cursor)) {
-        subscriber.next({
-          id: String(event.id),
-          type: "mission-event",
-          data: event,
-        });
-      }
       return unsubscribe;
     });
   }
