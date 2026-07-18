@@ -1,5 +1,5 @@
 import { DatePipe, JsonPipe } from "@angular/common";
-import { Component, OnDestroy, OnInit } from "@angular/core";
+import { Component, OnDestroy, OnInit, signal } from "@angular/core";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import type { MissionEventRecord, MissionRecord } from "@orkestr/shared";
 import { ApiService, errorText } from "./api.service";
@@ -174,11 +174,11 @@ import { ApiService, errorText } from "./api.service";
   `,
 })
 export class MissionDetailComponent implements OnInit, OnDestroy {
-  mission: MissionRecord | null = null;
-  events: MissionEventRecord[] = [];
-  error = "";
-  busy = false;
-  connected = false;
+  private readonly missionState = signal<MissionRecord | null>(null);
+  private readonly eventsState = signal<MissionEventRecord[]>([]);
+  private readonly errorState = signal("");
+  private readonly busyState = signal(false);
+  private readonly connectedState = signal(false);
   private eventSource: EventSource | null = null;
   private readonly id: string;
 
@@ -187,6 +187,26 @@ export class MissionDetailComponent implements OnInit, OnDestroy {
     private readonly api: ApiService,
   ) {
     this.id = route.snapshot.paramMap.get("id") ?? "";
+  }
+
+  get mission(): MissionRecord | null {
+    return this.missionState();
+  }
+
+  get events(): MissionEventRecord[] {
+    return this.eventsState();
+  }
+
+  get error(): string {
+    return this.errorState();
+  }
+
+  get busy(): boolean {
+    return this.busyState();
+  }
+
+  get connected(): boolean {
+    return this.connectedState();
   }
 
   get visibleEvents(): MissionEventRecord[] {
@@ -297,15 +317,15 @@ export class MissionDetailComponent implements OnInit, OnDestroy {
 
   private connectEvents(): void {
     this.eventSource = new EventSource(`/api/missions/${this.id}/events`);
-    this.eventSource.onopen = () => (this.connected = true);
-    this.eventSource.onerror = () => (this.connected = false);
+    this.eventSource.onopen = () => this.connectedState.set(true);
+    this.eventSource.onerror = () => this.connectedState.set(false);
     this.eventSource.addEventListener("mission-event", (message) => {
       const event = JSON.parse(
         (message as MessageEvent<string>).data,
       ) as MissionEventRecord;
       if (!this.events.some((existing) => existing.id === event.id)) {
-        this.events = [...this.events, event].sort(
-          (left, right) => left.id - right.id,
+        this.eventsState.set(
+          [...this.events, event].sort((left, right) => left.id - right.id),
         );
       }
       void this.refresh();
@@ -314,24 +334,24 @@ export class MissionDetailComponent implements OnInit, OnDestroy {
 
   private async refresh(): Promise<void> {
     try {
-      this.mission = await this.api.get<MissionRecord>(
-        `/api/missions/${this.id}`,
+      this.missionState.set(
+        await this.api.get<MissionRecord>(`/api/missions/${this.id}`),
       );
     } catch (error) {
-      this.error = errorText(error);
+      this.errorState.set(errorText(error));
     }
   }
 
   private async action(action: () => Promise<unknown>): Promise<void> {
-    this.busy = true;
-    this.error = "";
+    this.busyState.set(true);
+    this.errorState.set("");
     try {
       await action();
       await this.refresh();
     } catch (error) {
-      this.error = errorText(error);
+      this.errorState.set(errorText(error));
     } finally {
-      this.busy = false;
+      this.busyState.set(false);
     }
   }
 }

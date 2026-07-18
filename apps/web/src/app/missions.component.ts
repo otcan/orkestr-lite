@@ -1,5 +1,4 @@
-import { Component, OnDestroy, OnInit } from "@angular/core";
-import { FormsModule } from "@angular/forms";
+import { Component, OnDestroy, OnInit, signal } from "@angular/core";
 import { DatePipe, DecimalPipe } from "@angular/common";
 import { Router, RouterLink } from "@angular/router";
 import type { MissionRecord } from "@orkestr/shared";
@@ -7,7 +6,7 @@ import { ApiService, errorText } from "./api.service";
 
 @Component({
   standalone: true,
-  imports: [FormsModule, DatePipe, DecimalPipe, RouterLink],
+  imports: [DatePipe, DecimalPipe, RouterLink],
   template: `
     <main class="page">
       <header class="page-header">
@@ -30,21 +29,22 @@ import { ApiService, errorText } from "./api.service";
           </div>
           <span class="model-label">GPT-5.6 verified at dispatch</span>
         </div>
-        <form (ngSubmit)="create()">
+        <form (submit)="create(); $event.preventDefault()">
           <textarea
             name="prompt"
-            [(ngModel)]="prompt"
+            [value]="prompt()"
+            (input)="prompt.set($any($event.target).value)"
             rows="5"
             maxlength="32000"
             placeholder="Describe a concrete outcome for Codex…"
             required
           ></textarea>
           <div class="composer-footer">
-            <span>{{ prompt.length | number }} / 32,000</span>
+            <span>{{ prompt().length | number }} / 32,000</span>
             <button
               class="primary"
               type="submit"
-              [disabled]="busy || !prompt.trim()"
+              [disabled]="busy || !prompt().trim()"
             >
               {{ busy ? "Queueing…" : "Create mission" }}
             </button>
@@ -151,16 +151,28 @@ import { ApiService, errorText } from "./api.service";
   `,
 })
 export class MissionsComponent implements OnInit, OnDestroy {
-  missions: MissionRecord[] = [];
-  prompt = "";
-  busy = false;
-  error = "";
+  readonly prompt = signal("");
+  private readonly missionsState = signal<MissionRecord[]>([]);
+  private readonly busyState = signal(false);
+  private readonly errorState = signal("");
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly api: ApiService,
     private readonly router: Router,
   ) {}
+
+  get missions(): MissionRecord[] {
+    return this.missionsState();
+  }
+
+  get busy(): boolean {
+    return this.busyState();
+  }
+
+  get error(): string {
+    return this.errorState();
+  }
 
   get activeMission(): MissionRecord | undefined {
     return this.missions.find((mission) =>
@@ -191,19 +203,19 @@ export class MissionsComponent implements OnInit, OnDestroy {
   }
 
   async create(): Promise<void> {
-    this.busy = true;
-    this.error = "";
+    this.busyState.set(true);
+    this.errorState.set("");
     try {
       const mission = await this.api.createMission({
-        prompt: this.prompt.trim(),
+        prompt: this.prompt().trim(),
         source: "web",
       });
-      this.prompt = "";
+      this.prompt.set("");
       await this.router.navigate(["/missions", mission.id]);
     } catch (error) {
-      this.error = errorText(error);
+      this.errorState.set(errorText(error));
     } finally {
-      this.busy = false;
+      this.busyState.set(false);
     }
   }
 
@@ -212,9 +224,9 @@ export class MissionsComponent implements OnInit, OnDestroy {
       const result = await this.api.get<{ data: MissionRecord[] }>(
         "/api/missions",
       );
-      this.missions = result.data;
+      this.missionsState.set(result.data);
     } catch (error) {
-      this.error = errorText(error);
+      this.errorState.set(errorText(error));
     }
   }
 }

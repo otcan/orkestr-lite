@@ -35,6 +35,7 @@ RUN npm ci
 
 COPY . .
 RUN npm run build
+RUN npm prune --omit=dev
 
 FROM toolchain AS runtime
 ENV NODE_ENV=production \

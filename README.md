@@ -35,6 +35,7 @@ Requirements: Node.js 22, npm 10, Git, and Codex CLI 0.144.5.
 
 ```bash
 npm install
+npx playwright install chromium
 npm run build
 npm test
 ```
@@ -44,6 +45,8 @@ Run the full local release gate:
 ```bash
 npm run check:release
 ```
+
+The release gate includes a real headless Chromium walkthrough of login, setup readiness, mission creation, live mission activity, completion, and logout.
 
 Run the isolated Docker build, health, authentication, restart, and persistence smoke test:
 

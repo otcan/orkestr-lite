@@ -1,4 +1,4 @@
-import { Component, OnInit } from "@angular/core";
+import { Component, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { ApiService } from "./api.service";
 import { LoginComponent } from "./login.component";
@@ -8,12 +8,12 @@ import { LoginComponent } from "./login.component";
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive, LoginComponent],
   template: `
-    @if (checkingSession) {
+    @if (checkingSession()) {
       <main class="loading-screen">
         <div class="spinner"></div>
         <span>Opening workstation…</span>
       </main>
-    } @else if (!authenticated) {
+    } @else if (!authenticated()) {
       <orkestr-login (authenticated)="onAuthenticated()" />
     } @else {
       <div class="app-shell">
@@ -36,27 +36,27 @@ import { LoginComponent } from "./login.component";
   `,
 })
 export class AppComponent implements OnInit {
-  checkingSession = true;
-  authenticated = false;
+  readonly checkingSession = signal(true);
+  readonly authenticated = signal(false);
 
   constructor(private readonly api: ApiService) {}
 
   async ngOnInit(): Promise<void> {
     try {
-      this.authenticated = await this.api.session();
+      this.authenticated.set(await this.api.session());
     } catch {
-      this.authenticated = false;
+      this.authenticated.set(false);
     } finally {
-      this.checkingSession = false;
+      this.checkingSession.set(false);
     }
   }
 
   onAuthenticated(): void {
-    this.authenticated = true;
+    this.authenticated.set(true);
   }
 
   async logout(): Promise<void> {
     await this.api.logout();
-    this.authenticated = false;
+    this.authenticated.set(false);
   }
 }

@@ -26,13 +26,15 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:integration": "node --test test/integration/browser-mission.test.mjs",
+    "test:browser": "npm run build && playwright test",
     "test:docker": "node test/smoke/docker-smoke.mjs",
     "audit": "npm audit && npm audit --omit=dev",
-    "check": "npm run format:check && npm run build && npm run typecheck && npm test && npm run test:integration",
+    "check": "npm run format:check && npm run build && npm run typecheck && npm test && npm run test:integration && npm run test:browser",
     "check:release": "npm run check && npm run audit && docker compose config --quiet",
     "start": "npm run start -w @orkestr/server"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "22.18.8",
     "prettier": "3.6.2",
     "typescript": "6.0.3"

@@ -58,12 +58,17 @@ export class AuthController {
     };
   }
 
+  @Public()
   @Get("session")
   session(@Req() request: Request) {
     const token = readCookie(request, "orkestr_session");
+    const authenticated = this.auth.verifySession(token);
     return {
-      authenticated: true,
-      csrfToken: token ? this.auth.createCsrfForExistingSession(token) : null,
+      authenticated,
+      csrfToken:
+        authenticated && token
+          ? this.auth.createCsrfForExistingSession(token)
+          : null,
     };
   }
 

@@ -1,5 +1,4 @@
-import { Component, OnDestroy, OnInit } from "@angular/core";
-import { FormsModule } from "@angular/forms";
+import { Component, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { ApiService, errorText } from "./api.service";
 
@@ -29,7 +28,7 @@ interface SetupStatus {
 
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [RouterLink],
   template: `
     <main class="page narrow">
       <header class="page-header">
@@ -104,16 +103,20 @@ interface SetupStatus {
                   </button>
                   <details>
                     <summary>Use an API key instead</summary>
-                    <form class="inline-form" (ngSubmit)="loginApiKey()">
+                    <form
+                      class="inline-form"
+                      (submit)="loginApiKey(); $event.preventDefault()"
+                    >
                       <input
                         type="password"
                         name="apiKey"
                         autocomplete="off"
                         placeholder="sk-…"
-                        [(ngModel)]="apiKey"
+                        [value]="apiKey()"
+                        (input)="apiKey.set($any($event.target).value)"
                         required
                       />
-                      <button type="submit" [disabled]="busy || !apiKey">
+                      <button type="submit" [disabled]="busy || !apiKey()">
                         Connect
                       </button>
                     </form>
@@ -199,13 +202,25 @@ interface SetupStatus {
   `,
 })
 export class SetupComponent implements OnInit, OnDestroy {
-  status: SetupStatus | null = null;
-  apiKey = "";
-  busy = false;
-  error = "";
+  readonly apiKey = signal("");
+  private readonly statusState = signal<SetupStatus | null>(null);
+  private readonly busyState = signal(false);
+  private readonly errorState = signal("");
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly api: ApiService) {}
+
+  get status(): SetupStatus | null {
+    return this.statusState();
+  }
+
+  get busy(): boolean {
+    return this.busyState();
+  }
+
+  get error(): string {
+    return this.errorState();
+  }
 
   ngOnInit(): void {
     void this.refresh();
@@ -224,8 +239,8 @@ export class SetupComponent implements OnInit, OnDestroy {
   }
 
   async loginApiKey(): Promise<void> {
-    const apiKey = this.apiKey;
-    this.apiKey = "";
+    const apiKey = this.apiKey();
+    this.apiKey.set("");
     await this.run(async () => {
       await this.api.post("/api/setup/codex/api-key", { apiKey });
       await this.refresh();
@@ -234,21 +249,23 @@ export class SetupComponent implements OnInit, OnDestroy {
 
   private async refresh(): Promise<void> {
     try {
-      this.status = await this.api.get<SetupStatus>("/api/setup/status");
+      this.statusState.set(
+        await this.api.get<SetupStatus>("/api/setup/status"),
+      );
     } catch (error) {
-      this.error = errorText(error);
+      this.errorState.set(errorText(error));
     }
   }
 
   private async run(action: () => Promise<void>): Promise<void> {
-    this.busy = true;
-    this.error = "";
+    this.busyState.set(true);
+    this.errorState.set("");
     try {
       await action();
     } catch (error) {
-      this.error = errorText(error);
+      this.errorState.set(errorText(error));
     } finally {
-      this.busy = false;
+      this.busyState.set(false);
     }
   }
 }
