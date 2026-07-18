@@ -76,3 +76,5 @@ The deterministic fixture verifies the protocol and product loop; it is not pres
 Implementation provenance and GPT-5.6 evidence are recorded in [BUILD_WEEK.md](BUILD_WEEK.md).
 
 The current competition checklist, official requirements, and owner-only submission inputs are tracked in [HACKATHON.md](HACKATHON.md).
+
+The exact judge path, bounded live prompt, sub-three-minute narration timeline, evidence list, and recovery rules are in [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md).

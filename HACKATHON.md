@@ -24,6 +24,7 @@ The Devpost rules and organizer updates are authoritative if any summary in this
 - [x] Public repository created
 - [x] Apache-2.0 license included
 - [x] README with setup, supported platform, sample workspace, and testing instructions
+- [x] Judge and sub-three-minute demo runbook prepared in [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md)
 - [ ] Devpost registration confirmed
 - [ ] Entrant eligibility and representative confirmed
 - [ ] Live authenticated GPT-5.6 acceptance mission recorded
@@ -44,6 +45,8 @@ The intended judge path is:
 4. Authenticate Codex, confirm GPT-5.6 readiness, and create a mission.
 5. Observe persisted live activity and the final response in the browser.
 6. Inspect the resulting workspace change and run the demo tests.
+
+Use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) for the exact prompt, commands, narration timeline, evidence capture, and recovery rules.
 
 The automated fixture covers the same backend mission lifecycle deterministically. It does not replace the required live GPT-5.6 evidence.
 
