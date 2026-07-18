@@ -10,6 +10,8 @@ Orkestr Lite
 
 Run persistent Codex coding missions from your browser.
 
+Character count: 55 of Devpost's 140-character tagline limit.
+
 ## Category
 
 Developer Tools
@@ -23,6 +25,10 @@ Orkestr Lite turns Codex into a durable, browser-operated coding workstation. Cr
 Codex is excellent at doing real engineering work, but a useful coding mission is more than a single prompt. It has setup state, a model choice, commands, approvals, progress, workspace changes, interruptions, and a result that should still be understandable after the terminal closes.
 
 Orkestr Lite asks a focused question: what is the smallest complete operating layer that makes a Codex mission persistent and observable without hiding Codex behind a generic chat interface?
+
+## Intended users
+
+Orkestr Lite is for developers who want Codex to handle bounded repository work while they retain operational control. It is especially useful for solo builders, maintainers, and small teams that need to leave a task running, review approvals, understand exactly what happened, or recover after a process restart without losing the mission record.
 
 ## What it does
 
@@ -39,6 +45,10 @@ From there, Orkestr Lite:
 
 The repository includes a seeded judge workspace with one bounded failing test. In the demo, GPT-5.6 finds the reversed clamp bounds, applies the smallest fix, runs the tests, and explains the change while the browser shows the full mission lifecycle.
 
+## What makes it different
+
+Orkestr Lite is not a chat skin and it is not a broad workflow builder. It treats a coding request as an operational object with an owner-visible state machine, model provenance, approvals, effects, and recovery history. Its intentionally serialized execution avoids competing changes to one workspace, while the backend-owned Codex process keeps credentials and protocol details out of the browser. The result is a compact control plane for real agent work rather than another place to exchange messages with an agent.
+
 ## How we built it
 
 The product is a modular TypeScript monolith:
@@ -52,6 +62,12 @@ The product is a modular TypeScript monolith:
 The runtime is intentionally narrow: one user, one container, one workspace, and one active mission. It runs as an unprivileged user with all Linux capabilities dropped, `no-new-privileges` enabled, a loopback-only default port, private data modes, strict browser security headers, CSRF protection, rate-limited authentication, and server-side session revocation.
 
 The release gate builds the production application, type-checks all workspaces, runs unit and integration/security suites, drives the complete product loop in real Chromium, audits production and development dependencies, and verifies the isolated container's health, authentication, restart behavior, persistence, user, capabilities, and filesystem modes.
+
+## Verified results
+
+At the narrative freeze, the production build, TypeScript checks, unit suite, browser-mission integration suite, HTTP/session security suite, real Chromium walkthrough, and both dependency audits pass. The seeded mission changes the expected source file and takes its test suite from one bounded failure to all three tests passing. The Docker gate independently verifies health, login, restart, persisted SQLite and workspace state, an unprivileged runtime user, zero effective Linux capabilities, `no-new-privileges`, and private data permissions. The corresponding commits and green GitHub Actions runs are public.
+
+Live challenge-account evidence is a separate release input from ORK-373 and ORK-374. The final entry must include the sanitized mission and effective-model details plus the primary implementation thread's `/feedback` session ID in the fields below.
 
 ## How Codex and GPT-5.6 were used
 
@@ -79,6 +95,10 @@ Packaging also exposed practical failures that unit tests did not: an unwritable
 - A hardened unprivileged container and automated security-boundary coverage.
 - Clear provenance, limitations, judge steps, a sub-three-minute demo script, and Apache-2.0 licensing in the public repository.
 
+## Expected impact
+
+The immediate impact is practical: a developer can start a repository task from a browser, walk away, return to a durable history, and make an informed approval or recovery decision. The broader idea is that agentic development tools should make operational truth first-class. Showing the requested model, actual model, commands, workspace effects, and uncertain recovery state makes autonomy easier to trust and easier to evaluate.
+
 ## What we learned
 
 Agent infrastructure benefits from treating work as an operational mission rather than a sequence of chat messages. The durable objects are intent, thread, turn, approvals, progress events, workspace effects, model provenance, and recovery state.
@@ -91,6 +111,10 @@ Finally, observability does not have to mean exposing private reasoning. Structu
 
 The next milestones are workspace inspection, a browser terminal, persistent timers, optional WhatsApp self-chat routing, stronger multi-workspace isolation, and release channels beyond Linux AMD64. The Lite constraint remains valuable: each capability should strengthen the persistent mission loop rather than turn the product into a general-purpose chat client.
 
+## Current limitations
+
+The competition build is single-user, supports one mounted workspace and one active mission, and targets Linux AMD64 with Docker Engine and Compose v2. It depends on the pinned Codex CLI app-server interface and requires the user's own eligible Codex authentication. It is loopback-only by default and is not a hosted multi-tenant service. WhatsApp routing, timers, a browser terminal, multiple workspaces, and other broader Orkestr capabilities are explicitly outside this release.
+
 ## Built with
 
 Codex CLI and app-server, GPT-5.6, TypeScript, Node.js 22, NestJS, Angular 22, SQLite, Playwright, Docker, and GitHub Actions.
@@ -101,8 +125,8 @@ Codex CLI and app-server, GPT-5.6, TypeScript, Node.js 22, NestJS, Angular 22, S
 - License: Apache-2.0
 - Supported platform: Linux AMD64 with Docker Engine and Docker Compose v2
 - Public YouTube demo: `OWNER INPUT: public URL and verified duration under 3:00`
-- Primary `/feedback` Codex Session ID: `OWNER INPUT: session ID`
-- Live GPT-5.6 evidence: `OWNER INPUT: mission ID, timestamp, requested model, and effective model`
+- Primary `/feedback` Codex Session ID (ORK-374): `OWNER INPUT: session ID`
+- Live GPT-5.6 evidence (ORK-373): `OWNER INPUT: mission ID, timestamp, requested model, and effective model`
 - Release commit: `OWNER INPUT: frozen release SHA`
 - Published image: `OWNER INPUT: immutable GHCR digest`
 
