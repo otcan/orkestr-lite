@@ -27,6 +27,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:integration": "node --test --test-concurrency=1 test/integration/*.test.mjs",
     "test:browser": "npm run build && playwright test",
+    "media:capture": "npm run build && ORKESTR_CAPTURE_MEDIA_DIR=assets/submission playwright test",
     "test:docker": "node test/smoke/docker-smoke.mjs",
     "audit": "npm audit && npm audit --omit=dev",
     "check": "npm run format:check && npm run build && npm run typecheck && npm test && npm run test:integration && npm run test:browser",

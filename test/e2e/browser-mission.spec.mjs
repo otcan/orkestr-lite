@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
-import { chmod, cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "../..");
 const fakeCodex = join(root, "test/fixtures/fake-codex.mjs");
+const mediaDirectory = process.env.ORKESTR_CAPTURE_MEDIA_DIR?.trim();
 
 test("runs the complete browser mission experience", async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), "orkestr-browser-e2e-"));
@@ -37,6 +38,7 @@ test("runs the complete browser mission experience", async ({ page }) => {
 
   try {
     await waitForHealth(port, child, () => logs);
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`http://127.0.0.1:${port}`);
 
     await page
@@ -56,6 +58,7 @@ test("runs the complete browser mission experience", async ({ page }) => {
       has: page.getByRole("heading", { name: "Codex connected" }),
     });
     await expect(codexConnection).toContainText("gpt-5.6");
+    await captureMedia(page, "setup-ready.png");
 
     await page.getByRole("link", { name: "Start your first mission" }).click();
     await page
@@ -75,6 +78,7 @@ test("runs the complete browser mission experience", async ({ page }) => {
     await expect(page.locator(".final-response")).toContainText(
       "Corrected the reversed clamp bounds",
     );
+    await captureMedia(page, "mission-complete.png");
 
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page.getByLabel("Administrator password")).toBeVisible();
@@ -99,6 +103,16 @@ test("runs the complete browser mission experience", async ({ page }) => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+async function captureMedia(page, filename) {
+  if (!mediaDirectory) return;
+  const outputDirectory = resolve(root, mediaDirectory);
+  await mkdir(outputDirectory, { recursive: true });
+  await page.screenshot({
+    path: join(outputDirectory, filename),
+    fullPage: true,
+  });
+}
 
 function assertFixtureChanged(source) {
   expect(source).toContain("Math.max(minimum, Math.min(maximum, value))");

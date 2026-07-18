@@ -26,6 +26,7 @@ The Devpost rules and organizer updates are authoritative if any summary in this
 - [x] README with setup, supported platform, sample workspace, and testing instructions
 - [x] Judge and sub-three-minute demo runbook prepared in [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md)
 - [x] Copy-ready English submission narrative prepared in [SUBMISSION.md](SUBMISSION.md)
+- [x] Devpost thumbnail and authentic fixture screenshots prepared in [MEDIA.md](MEDIA.md)
 - [ ] Devpost registration confirmed
 - [ ] Entrant eligibility and representative confirmed
 - [ ] Live authenticated GPT-5.6 acceptance mission recorded

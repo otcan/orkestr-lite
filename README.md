@@ -89,3 +89,5 @@ The current competition checklist, official requirements, and owner-only submiss
 The exact judge path, bounded live prompt, sub-three-minute narration timeline, evidence list, and recovery rules are in [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md).
 
 The copy-ready Developer Tools submission narrative is in [SUBMISSION.md](SUBMISSION.md).
+
+The thumbnail, authentic screenshot captions, video requirements, and capture-safety checklist are in [MEDIA.md](MEDIA.md).
