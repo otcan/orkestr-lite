@@ -12,9 +12,9 @@ This Build Week release intentionally focuses on the complete browser mission lo
 docker compose up --build
 ```
 
-Open <http://localhost:3000>. On first boot, read the generated administrator password from the container logs. For deterministic deployments, set `ORKESTR_ADMIN_PASSWORD` in the environment.
+Open <http://localhost:3000>. On first boot, read the generated administrator password from the container logs. For a deterministic local password, start with `ORKESTR_ADMIN_PASSWORD="choose-a-long-password" docker compose up --build`.
 
-Persistent state is stored in the `orkestr-data` volume. The local `./workspace` directory is mounted at `/workspace`.
+Application state and the seeded coding workspace persist in the `orkestr-data` and `orkestr-workspace` volumes. Inspect workspace changes with `docker compose exec orkestr git -C /workspace diff`. Mount only an intended disposable host workspace if you replace the default volume.
 
 ### Supported platform
 
