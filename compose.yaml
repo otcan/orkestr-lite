@@ -1,0 +1,21 @@
+services:
+  orkestr:
+    image: ghcr.io/otcan/orkestr-lite:latest
+    build:
+      context: .
+    init: true
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - orkestr-data:/data
+      - ./workspace:/workspace
+    environment:
+      ORKESTR_HOME: /data
+      CODEX_HOME: /data/codex
+      ORKESTR_WORKSPACE: /workspace
+      ORKESTR_HOST: 0.0.0.0
+      ORKESTR_PORT: 3000
+    restart: unless-stopped
+
+volumes:
+  orkestr-data:

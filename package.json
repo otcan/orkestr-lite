@@ -1,0 +1,40 @@
+{
+  "name": "orkestr-lite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Run persistent Codex missions from your browser.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "esbuild": "0.28.1"
+  },
+  "scripts": {
+    "build": "npm run build -w @orkestr/shared && npm run build -w @orkestr/codex-client && npm run build -w @orkestr/web && npm run build -w @orkestr/server",
+    "build:server": "npm run build -w @orkestr/shared && npm run build -w @orkestr/codex-client && npm run build -w @orkestr/server",
+    "build:web": "npm run build -w @orkestr/shared && npm run build -w @orkestr/web",
+    "dev:server": "npm run dev -w @orkestr/server",
+    "dev:web": "npm run dev -w @orkestr/web",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:integration": "node --test test/integration/browser-mission.test.mjs",
+    "test:docker": "node test/smoke/docker-smoke.mjs",
+    "audit": "npm audit && npm audit --omit=dev",
+    "check": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:integration",
+    "check:release": "npm run check && npm run audit && docker compose config --quiet",
+    "start": "npm run start -w @orkestr/server"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.8",
+    "prettier": "3.6.2",
+    "typescript": "6.0.3"
+  }
+}

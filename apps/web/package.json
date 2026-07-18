@@ -1,0 +1,28 @@
+{
+  "name": "@orkestr/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "ng build",
+    "dev": "ng serve --host 127.0.0.1 --port 4200 --proxy-config proxy.conf.json",
+    "typecheck": "ng build --configuration development",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@angular/common": "22.0.7",
+    "@angular/compiler": "22.0.7",
+    "@angular/core": "22.0.7",
+    "@angular/forms": "22.0.7",
+    "@angular/platform-browser": "22.0.7",
+    "@angular/router": "22.0.7",
+    "@orkestr/shared": "0.1.0",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1",
+    "zone.js": "0.16.0"
+  },
+  "devDependencies": {
+    "@angular/build": "22.0.7",
+    "@angular/cli": "22.0.7",
+    "@angular/compiler-cli": "22.0.7"
+  }
+}

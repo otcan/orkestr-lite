@@ -1,0 +1,75 @@
+# Orkestr Lite
+
+Run persistent Codex missions from your browser.
+
+Orkestr Lite is a single-user, single-container Codex workstation. The first implementation milestone provides browser setup, a persistent mission queue, live Codex activity, approvals, interruption, recovery, and a deterministic demo workspace.
+
+This Build Week release intentionally focuses on the complete browser mission loop. WhatsApp routing, timers, a PTY terminal, and broader multi-user Orkestr capabilities are future milestones.
+
+## Quick start
+
+```bash
+docker compose up --build
+```
+
+Open <http://localhost:3000>. On first boot, read the generated administrator password from the container logs. For deterministic deployments, set `ORKESTR_ADMIN_PASSWORD` in the environment.
+
+Persistent state is stored in the `orkestr-data` volume. The local `./workspace` directory is mounted at `/workspace`.
+
+### Supported platform
+
+The competition build targets Linux AMD64 with Docker Engine and Docker Compose v2. The image runs as the unprivileged `orkestr` user. Other platforms are not part of the first release gate.
+
+### First mission
+
+1. Sign in with the administrator password.
+2. Authenticate Codex with device login or an API key.
+3. Wait for setup to report that Codex and GPT-5.6 are ready.
+4. Create a mission from the browser and follow its live activity.
+
+The seeded demo workspace contains a bounded failing test for a deterministic judge walkthrough. Reset it with `node demo/reset-demo.mjs` when developing outside Docker.
+
+## Development
+
+Requirements: Node.js 22, npm 10, Git, and Codex CLI 0.144.5.
+
+```bash
+npm install
+npm run build
+npm test
+```
+
+Run the full local release gate:
+
+```bash
+npm run check:release
+```
+
+Run the isolated Docker build, health, authentication, restart, and persistence smoke test:
+
+```bash
+npm run test:docker
+```
+
+Start the API and web development servers separately:
+
+```bash
+npm run dev:server
+npm run dev:web
+```
+
+## Safety
+
+Do not expose port 3000 directly to the public internet. See [SECURITY.md](SECURITY.md).
+
+## How Codex was used
+
+Codex was the primary implementation environment for this repository. Product decisions remained explicit: a modular monolith, one active mission, backend ownership of the Codex app-server process, persisted mission history, and deliberate recovery instead of silently replaying uncertain work. GPT-5.6 is selected through app-server model discovery, and each mission records the requested and effective model identifiers.
+
+The deterministic fixture verifies the protocol and product loop; it is not presented as a live GPT-5.6 challenge-account run. Live acceptance evidence and the primary implementation thread `/feedback` ID must be recorded before submission.
+
+## Build Week
+
+Implementation provenance and GPT-5.6 evidence are recorded in [BUILD_WEEK.md](BUILD_WEEK.md).
+
+The current competition checklist, official requirements, and owner-only submission inputs are tracked in [HACKATHON.md](HACKATHON.md).
