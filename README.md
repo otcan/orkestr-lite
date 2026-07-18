@@ -78,7 +78,7 @@ Do not expose port 3000 directly to the public internet. See [SECURITY.md](SECUR
 
 Codex was the primary implementation environment for this repository. Product decisions remained explicit: a modular monolith, one active mission, backend ownership of the Codex app-server process, persisted mission history, and deliberate recovery instead of silently replaying uncertain work. GPT-5.6 is selected through app-server model discovery, and each mission records the requested and effective model identifiers.
 
-The deterministic fixture verifies the protocol and product loop; it is not presented as a live GPT-5.6 challenge-account run. Live acceptance evidence and the primary implementation thread `/feedback` ID must be recorded before submission.
+The deterministic fixture verifies the protocol and product loop; it is not presented as a live GPT-5.6 challenge-account run. The sanitized authenticated acceptance evidence and primary implementation thread `/feedback` ID are recorded in [BUILD_WEEK.md](BUILD_WEEK.md).
 
 ## Build Week
 

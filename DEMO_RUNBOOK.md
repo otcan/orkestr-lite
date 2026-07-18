@@ -115,7 +115,7 @@ Keep these non-secret artifacts together for the submission:
 - [ ] Video explicitly explains how Codex and GPT-5.6 are used.
 - [ ] Repository is public and the submitted SHA contains the Apache-2.0 license, README, security guidance, sample workspace, and passing checks.
 - [ ] Developer Tools category and English project description are selected.
-- [ ] `/feedback` session ID and live GPT-5.6 mission evidence are recorded.
+- [x] `/feedback` session ID and live GPT-5.6 mission evidence are recorded.
 - [ ] Release SHA and published image digest are frozen and match the submitted repository.
 - [ ] Repository, video, and judge path work in a signed-out browser/session.
 - [ ] Entry is submitted before July 21, 2026 at 17:00 PT.

@@ -29,8 +29,8 @@ The Devpost rules and organizer updates are authoritative if any summary in this
 - [x] Devpost thumbnail and authentic fixture screenshots prepared in [MEDIA.md](MEDIA.md)
 - [ ] Devpost registration confirmed
 - [ ] Entrant eligibility and representative confirmed
-- [ ] Live authenticated GPT-5.6 acceptance mission recorded
-- [ ] Primary Codex implementation thread `/feedback` session ID recorded
+- [x] Live authenticated GPT-5.6 acceptance mission recorded
+- [x] Primary Codex implementation thread `/feedback` session ID recorded
 - [ ] English project description finalized
 - [ ] Public YouTube demo shorter than three minutes, with audio explaining Codex and GPT-5.6 usage
 - [x] Release candidate tag, commit SHA, and image digest recorded

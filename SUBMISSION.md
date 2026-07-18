@@ -67,7 +67,9 @@ The release gate builds the production application, type-checks all workspaces, 
 
 At the narrative freeze, the production build, TypeScript checks, unit suite, browser-mission integration suite, HTTP/session security suite, real Chromium walkthrough, and both dependency audits pass. The seeded mission changes the expected source file and takes its test suite from one bounded failure to all three tests passing. The Docker gate independently verifies health, login, restart, persisted SQLite and workspace state, an unprivileged runtime user, zero effective Linux capabilities, `no-new-privileges`, and private data permissions. The corresponding commits and green GitHub Actions runs are public.
 
-Live challenge-account evidence is a separate release input from ORK-373 and ORK-374. The final entry must include the sanitized mission and effective-model details plus the primary implementation thread's `/feedback` session ID in the fields below.
+Live challenge-account evidence from ORK-373 and ORK-374 is recorded below and
+in [BUILD_WEEK.md](BUILD_WEEK.md). It contains only sanitized mission and model
+provenance plus the primary implementation thread's `/feedback` session ID.
 
 ## How Codex and GPT-5.6 were used
 
@@ -125,8 +127,8 @@ Codex CLI and app-server, GPT-5.6, TypeScript, Node.js 22, NestJS, Angular 22, S
 - License: Apache-2.0
 - Supported platform: Linux AMD64 with Docker Engine and Docker Compose v2
 - Public YouTube demo: `OWNER INPUT: public URL and verified duration under 3:00`
-- Primary `/feedback` Codex Session ID (ORK-374): `OWNER INPUT: session ID`
-- Live GPT-5.6 evidence (ORK-373): `OWNER INPUT: mission ID, timestamp, requested model, and effective model`
+- Primary `/feedback` Codex Session ID (ORK-374): `019f745b-ee85-7533-b151-e25c7baff729`
+- Live GPT-5.6 evidence (ORK-373): mission `8f23b759-7741-4c19-a1c8-b7936de567e3`, started `2026-07-18T12:45:49.398Z`, requested `gpt-5.6-sol`, effective `gpt-5.6-sol`
 - Release: <https://github.com/otcan/orkestr-lite/releases/tag/v0.1.0-build-week>
 - Release commit: `06f736f569f12a67164a43613f81e740eb36d2cc`
 - Published image: `ghcr.io/otcan/orkestr-lite@sha256:026beb20c20f92b226424ffa32316b7a9b0fe2fb26461aae0d95df3960657e9b`

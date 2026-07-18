@@ -32,10 +32,10 @@ Later milestones may add workspace inspection, a PTY terminal, WhatsApp self-cha
 
 ## Codex and GPT-5.6 evidence
 
-- Primary implementation thread: current Codex thread; `/feedback` ID must be added before submission
+- Primary implementation thread `/feedback` ID: `019f745b-ee85-7533-b151-e25c7baff729`
 - Codex CLI protocol baseline: `0.144.5`
 - Model selection: discovered at runtime with `model/list`; every mission records requested and effective model identifiers
-- Required model family: GPT-5.6; the exact challenge-account identifier must be captured from a live authenticated run
+- Required model family: GPT-5.6; the authenticated acceptance run selected the exact account identifier `gpt-5.6-sol`
 
 ## Product decisions made by the entrant
 
@@ -66,9 +66,37 @@ workspace diff, and runs the repaired demo tests in a separate process.
 - clean-clone Compose quick start — passed with loopback-only port publishing, forwarded administrator-password override, persistent data/workspace volumes, healthy restart, and no duplicate init process
 
 The fixture is deterministic test infrastructure, not evidence of a live GPT-5.6
-challenge-account run. Before submission, add the real authenticated mission ID,
-effective model identifier returned by app-server, changed files, passing output,
-and the primary Codex thread's `/feedback` ID here.
+challenge-account run.
+
+## Live authenticated GPT-5.6 acceptance
+
+The live acceptance ran on July 18, 2026 against the ChatGPT-authenticated Codex
+account already present on the competition host. The service and browser were
+bound to loopback, the mission used a disposable copy of the bounded demo
+workspace, and no account email, token, device code, or credential was captured.
+
+- Mission ID: `8f23b759-7741-4c19-a1c8-b7936de567e3`
+- Codex thread ID: `019f7542-f253-7f21-8116-c170da8e6f7e`
+- Codex turn ID: `019f7542-f75a-7a12-b735-3cf15bf4a9cd`
+- Started: `2026-07-18T12:45:49.398Z`
+- Finished: `2026-07-18T12:46:30.456Z`
+- Codex CLI: `0.144.5`
+- Authentication mode: `chatgpt`
+- Requested model: `gpt-5.6-sol`
+- Effective model: `gpt-5.6-sol`
+- Changed file: `src/clamp.js`
+- Independent verification: `node --test test/clamp.test.js` reported 3 passed, 0 failed
+- Sanitized browser evidence: `assets/submission/live-mission-complete.png`
+
+The mission corrected the reversed minimum and maximum arguments in the clamp
+expression, ran the workspace tests itself, and completed without a model
+reroute. A separate process then reran the tests and confirmed the three passing
+cases. The reusable `npm run acceptance:live` runner validates readiness,
+requested/effective GPT-5.6 provenance, the bounded file change, and the
+independent test result without printing private account fields.
+
+Codex accepted the feedback upload with logs included and returned primary
+implementation session ID `019f745b-ee85-7533-b151-e25c7baff729`.
 
 ## Frozen Build Week release
 
@@ -103,4 +131,4 @@ The immutable tag, image, provenance, smoke test, and amendment process are defi
 - The initial implementation targets Linux AMD64.
 - App-server is an evolving Codex interface, so the CLI version is pinned and compatibility is checked.
 - WhatsApp and timers are not part of the first browser-mission milestone.
-- Live GPT-5.6 acceptance still requires authentication with the challenge account.
+- Live GPT-5.6 acceptance passed with the host's authenticated challenge account; final submission ownership and public-video inputs remain pending.
