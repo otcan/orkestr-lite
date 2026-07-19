@@ -21,6 +21,13 @@ export const createMissionSchema = z.object({
   prompt: z.string().trim().min(1).max(32_000),
   source: z.enum(missionSources).default("web"),
   model: z.string().trim().min(1).max(120).optional(),
+  reasoningEffort: z
+    .string()
+    .trim()
+    .min(1)
+    .max(32)
+    .regex(/^[a-z][a-z0-9-]*$/)
+    .optional(),
 });
 
 export type CreateMissionInput = z.infer<typeof createMissionSchema>;
@@ -57,9 +64,12 @@ export interface MissionRecord {
   error: string | null;
   timerId: string | null;
   requestedModel: string | null;
+  requestedReasoningEffort: string | null;
   effectiveModel: string | null;
   interruptionMetadata: unknown | null;
   recoveryMetadata: unknown | null;
+  enqueueSequence: number | null;
+  ingressKey: string | null;
 }
 
 export interface MissionEventRecord {

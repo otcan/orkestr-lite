@@ -5,7 +5,10 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import type { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
 import { AppModule } from "./app.module.js";
+import { AuthService } from "./auth/auth.service.js";
 import { readRuntimeConfig } from "./config/runtime-config.js";
+import { TerminalService } from "./terminal/terminal.service.js";
+import { DeskService } from "./desk/desk.service.js";
 
 async function bootstrap(): Promise<void> {
   process.umask(0o077);
@@ -62,6 +65,8 @@ async function bootstrap(): Promise<void> {
     next();
   });
   app.enableShutdownHooks();
+  app.get(TerminalService).attach(app.getHttpServer(), app.get(AuthService));
+  app.get(DeskService).attach(app.getHttpServer(), app.get(AuthService));
   await app.listen(config.port, config.host);
   logger.log(`Orkestr Lite listening on http://${config.host}:${config.port}`);
   if (!["127.0.0.1", "::1", "localhost"].includes(config.host)) {

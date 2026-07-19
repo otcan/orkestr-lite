@@ -26,9 +26,17 @@ interface MissionRow {
   error: string | null;
   timer_id: string | null;
   requested_model: string | null;
+  requested_reasoning_effort: string | null;
   effective_model: string | null;
   interruption_metadata_json: string | null;
   recovery_metadata_json: string | null;
+  enqueue_sequence: number | null;
+  ingress_key: string | null;
+}
+
+export interface CreateMissionOptions {
+  ingressKey?: string | null;
+  enqueueSequence?: number;
 }
 
 @Injectable()
@@ -41,16 +49,25 @@ export class MissionRepository {
   create(
     input: CreateMissionInput,
     workspace: string,
-    requestedModel: string,
+    requestedModel: string | null,
+    timerId: string | null = null,
+    options: CreateMissionOptions = {},
   ): MissionRecord {
+    if (options.ingressKey) {
+      const existing = this.findByIngress(input.source, options.ingressKey);
+      if (existing) return existing;
+    }
     const id = randomUUID();
     const createdAt = new Date().toISOString();
     const title = input.title || deriveTitle(input.prompt);
+    const enqueueSequence =
+      options.enqueueSequence ?? this.reserveEnqueueSequence();
     this.database.db
       .prepare(
         `INSERT INTO missions(
-          id, title, prompt, source, workspace, status, created_at, requested_model
-        ) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`,
+          id, title, prompt, source, workspace, status, created_at, requested_model,
+          requested_reasoning_effort, timer_id, enqueue_sequence, ingress_key
+        ) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -60,6 +77,10 @@ export class MissionRepository {
         workspace,
         createdAt,
         input.model ?? requestedModel,
+        input.reasoningEffort ?? null,
+        timerId,
+        enqueueSequence,
+        options.ingressKey ?? null,
       );
     const mission = this.require(id);
     this.appendEvent(id, "mission.queued", { source: mission.source });
@@ -69,9 +90,38 @@ export class MissionRepository {
   list(limit = 100): MissionRecord[] {
     return (
       this.database.db
-        .prepare("SELECT * FROM missions ORDER BY created_at DESC LIMIT ?")
+        .prepare(
+          "SELECT * FROM missions ORDER BY enqueue_sequence DESC LIMIT ?",
+        )
         .all(limit) as MissionRow[]
     ).map(mapMission);
+  }
+
+  page(limit = 50, beforeSequence?: number): MissionRecord[] {
+    const safeLimit = Math.max(1, Math.min(100, limit));
+    const rows = beforeSequence
+      ? (this.database.db
+          .prepare(
+            `SELECT * FROM missions WHERE enqueue_sequence < ?
+             ORDER BY enqueue_sequence DESC LIMIT ?`,
+          )
+          .all(beforeSequence, safeLimit) as MissionRow[])
+      : (this.database.db
+          .prepare(
+            "SELECT * FROM missions ORDER BY enqueue_sequence DESC LIMIT ?",
+          )
+          .all(safeLimit) as MissionRow[]);
+    return rows.map(mapMission);
+  }
+
+  findByIngress(
+    source: MissionRecord["source"],
+    ingressKey: string,
+  ): MissionRecord | null {
+    const row = this.database.db
+      .prepare("SELECT * FROM missions WHERE source = ? AND ingress_key = ?")
+      .get(source, ingressKey) as MissionRow | undefined;
+    return row ? mapMission(row) : null;
   }
 
   find(id: string): MissionRecord | null {
@@ -96,20 +146,68 @@ export class MissionRepository {
     return row ? mapMission(row) : null;
   }
 
+  findByTurn(turnId: string): MissionRecord | null {
+    const row = this.database.db
+      .prepare("SELECT * FROM missions WHERE codex_turn_id = ? LIMIT 1")
+      .get(turnId) as MissionRow | undefined;
+    return row ? mapMission(row) : null;
+  }
+
   nextQueued(): MissionRecord | null {
     const row = this.database.db
       .prepare(
-        "SELECT * FROM missions WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1",
+        "SELECT * FROM missions WHERE status = 'queued' ORDER BY enqueue_sequence ASC LIMIT 1",
       )
       .get() as MissionRow | undefined;
     return row ? mapMission(row) : null;
+  }
+
+  pendingCount(): number {
+    const row = this.database.db
+      .prepare(
+        `SELECT
+          (SELECT COUNT(*) FROM missions
+           WHERE status IN ('queued', 'starting', 'running', 'awaiting_approval')) +
+          (SELECT COUNT(*) FROM whatsapp_batches WHERE status = 'open') AS count`,
+      )
+      .get() as { count: number };
+    return row.count;
+  }
+
+  queuePosition(id: string): number | null {
+    const mission = this.find(id);
+    if (!mission || mission.status !== "queued") return null;
+    const sequence = mission.enqueueSequence ?? 0;
+    const row = this.database.db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM (
+          SELECT enqueue_sequence FROM missions
+          WHERE status = 'queued' AND id != ?
+          UNION ALL
+          SELECT enqueue_sequence FROM whatsapp_batches WHERE status = 'open'
+        ) WHERE enqueue_sequence < ?`,
+      )
+      .get(id, sequence) as { count: number };
+    return row.count + 1;
+  }
+
+  reserveEnqueueSequence(): number {
+    const row = this.database.db
+      .prepare(
+        `SELECT COALESCE(MAX(sequence), 0) + 1 AS next FROM (
+          SELECT enqueue_sequence AS sequence FROM missions
+          UNION ALL SELECT enqueue_sequence AS sequence FROM whatsapp_batches
+        )`,
+      )
+      .get() as { next: number };
+    return row.next;
   }
 
   active(): MissionRecord[] {
     return (
       this.database.db
         .prepare(
-          "SELECT * FROM missions WHERE status IN ('starting', 'running', 'awaiting_approval') ORDER BY created_at",
+          "SELECT * FROM missions WHERE status IN ('starting', 'running', 'awaiting_approval') ORDER BY enqueue_sequence",
         )
         .all() as MissionRow[]
     ).map(mapMission);
@@ -129,6 +227,7 @@ export class MissionRepository {
       effectiveModel: string | null;
       interruptionMetadata: unknown | null;
       recoveryMetadata: unknown | null;
+      enqueueSequence: number | null;
     }>,
   ): MissionRecord {
     const columns: Record<string, string> = {
@@ -143,6 +242,7 @@ export class MissionRepository {
       effectiveModel: "effective_model",
       interruptionMetadata: "interruption_metadata_json",
       recoveryMetadata: "recovery_metadata_json",
+      enqueueSequence: "enqueue_sequence",
     };
     const entries = Object.entries(patch);
     if (entries.length === 0) return this.require(id);
@@ -222,9 +322,12 @@ function mapMission(row: MissionRow): MissionRecord {
     error: row.error,
     timerId: row.timer_id,
     requestedModel: row.requested_model,
+    requestedReasoningEffort: row.requested_reasoning_effort,
     effectiveModel: row.effective_model,
     interruptionMetadata: parseJson(row.interruption_metadata_json),
     recoveryMetadata: parseJson(row.recovery_metadata_json),
+    enqueueSequence: row.enqueue_sequence,
+    ingressKey: row.ingress_key,
   };
 }
 

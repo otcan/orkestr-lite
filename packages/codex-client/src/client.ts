@@ -30,6 +30,7 @@ export interface CodexClientEvents {
 
 export class CodexAppServerClient extends EventEmitter<CodexClientEvents> {
   private process: ChildProcessWithoutNullStreams | null = null;
+  private socket: WebSocket | null = null;
   private requestId = 0;
   private readonly pending = new Map<RequestId, PendingRequest>();
   private started = false;
@@ -40,13 +41,31 @@ export class CodexAppServerClient extends EventEmitter<CodexClientEvents> {
   }
 
   get isRunning(): boolean {
-    return this.process !== null && this.process.exitCode === null;
+    return (
+      (this.process !== null && this.process.exitCode === null) ||
+      this.socket?.readyState === WebSocket.OPEN
+    );
   }
 
   async start(): Promise<void> {
     if (this.isRunning && this.started) return;
 
     this.stopping = false;
+    if (this.options.remoteUrl) await this.connectRemote();
+    else this.spawnLocal();
+
+    await this.request("initialize", {
+      clientInfo: {
+        name: "orkestr_lite",
+        title: "Orkestr Lite",
+        version: "0.1.0",
+      },
+    });
+    this.notify("initialized", {});
+    this.started = true;
+  }
+
+  private spawnLocal(): void {
     const command = this.options.command ?? "codex";
     const args = this.options.args ?? ["app-server", "--listen", "stdio://"];
     const child = spawn(command, args, {
@@ -79,20 +98,70 @@ export class CodexAppServerClient extends EventEmitter<CodexClientEvents> {
       );
       if (!this.stopping) this.emit("exit", code, signal);
     });
+  }
 
-    await this.request("initialize", {
-      clientInfo: {
-        name: "orkestr_lite",
-        title: "Orkestr Lite",
-        version: "0.1.0",
-      },
+  private connectRemote(): Promise<void> {
+    const target = new URL(this.options.remoteUrl!);
+    if (this.options.remoteToken) {
+      target.searchParams.set("token", this.options.remoteToken);
+    }
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(target);
+      this.socket = socket;
+      let opened = false;
+      const timeout = setTimeout(() => {
+        if (!opened) {
+          socket.close();
+          reject(new Error("Desk Codex transport timed out"));
+        }
+      }, 10_000);
+      socket.addEventListener("open", () => {
+        opened = true;
+        clearTimeout(timeout);
+        resolve();
+      });
+      socket.addEventListener("message", (event) => {
+        let envelope: { type?: string; line?: string };
+        try {
+          envelope = JSON.parse(String(event.data)) as typeof envelope;
+        } catch {
+          this.emit("stderr", "Ignored invalid Desk transport frame");
+          return;
+        }
+        if (envelope.type === "stdout" && typeof envelope.line === "string") {
+          this.handleLine(envelope.line);
+        } else if (
+          envelope.type === "stderr" &&
+          typeof envelope.line === "string"
+        ) {
+          this.emit("stderr", redactSecrets(envelope.line));
+        }
+      });
+      socket.addEventListener("error", () => {
+        if (!opened) {
+          clearTimeout(timeout);
+          reject(new Error("Desk Codex transport failed"));
+        }
+      });
+      socket.addEventListener("close", () => {
+        clearTimeout(timeout);
+        this.started = false;
+        this.socket = null;
+        this.rejectAll(new Error("Desk Codex transport disconnected"));
+        if (!this.stopping) this.emit("exit", null, null);
+      });
     });
-    this.notify("initialized", {});
-    this.started = true;
   }
 
   async stop(): Promise<void> {
     this.stopping = true;
+    if (this.socket) {
+      if (this.socket.readyState === WebSocket.OPEN) {
+        this.socket.send(JSON.stringify({ type: "stop" }));
+        this.socket.close(1000, "Client stopped");
+      }
+      this.socket = null;
+    }
     const child = this.process;
     if (!child) return;
     child.kill("SIGTERM");
@@ -109,7 +178,7 @@ export class CodexAppServerClient extends EventEmitter<CodexClientEvents> {
   }
 
   request<T>(method: string, params?: unknown): Promise<T> {
-    if (!this.process) {
+    if (!this.isRunning) {
       return Promise.reject(new Error("Codex app-server is not running"));
     }
     const id = ++this.requestId;
@@ -164,15 +233,17 @@ export class CodexAppServerClient extends EventEmitter<CodexClientEvents> {
     cwd: string;
     model: string;
     approvalPolicy?: "untrusted" | "on-request" | "never";
+    developerInstructions?: string;
   }): Promise<ThreadResult> {
     return this.request("thread/start", {
       cwd: params.cwd,
       model: params.model,
-      approvalPolicy: params.approvalPolicy ?? "on-request",
+      approvalPolicy: params.approvalPolicy ?? "never",
       approvalsReviewer: "user",
-      sandbox: "workspace-write",
+      sandbox: "danger-full-access",
       ephemeral: false,
       serviceName: "orkestr-lite",
+      developerInstructions: params.developerInstructions,
     });
   }
 
@@ -185,22 +256,29 @@ export class CodexAppServerClient extends EventEmitter<CodexClientEvents> {
     prompt: string;
     cwd: string;
     model: string;
+    effort?: string;
+    clientUserMessageId?: string;
+    outputSchema?: unknown;
+    additionalWritableRoots?: string[];
   }): Promise<TurnResult> {
     return this.request("turn/start", {
       threadId: params.threadId,
+      clientUserMessageId: params.clientUserMessageId,
       input: [{ type: "text", text: params.prompt }],
       cwd: params.cwd,
       model: params.model,
-      approvalPolicy: "on-request",
+      effort: params.effort,
+      outputSchema: params.outputSchema,
+      approvalPolicy: "never",
       approvalsReviewer: "user",
       sandboxPolicy: {
-        type: "workspaceWrite",
-        writableRoots: [params.cwd],
-        networkAccess: false,
-        excludeTmpdirEnvVar: false,
-        excludeSlashTmp: false,
+        type: "dangerFullAccess",
       },
     });
+  }
+
+  compactThread(threadId: string): Promise<Record<string, never>> {
+    return this.request("thread/compact/start", { threadId });
   }
 
   interruptTurn(
@@ -259,6 +337,12 @@ export class CodexAppServerClient extends EventEmitter<CodexClientEvents> {
   }
 
   private write(message: unknown): void {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(
+        JSON.stringify({ type: "stdin", line: JSON.stringify(message) }),
+      );
+      return;
+    }
     if (!this.process?.stdin.writable) {
       throw new Error("Codex app-server stdin is not writable");
     }

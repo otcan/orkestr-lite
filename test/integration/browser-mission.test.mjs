@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "../..");
 const fakeCodex = join(root, "test/fixtures/fake-codex.mjs");
 
-test("runs a persistent browser mission through the complete backend loop", async () => {
+test("runs sequential turns through one persistent Codex conversation", async () => {
   const directory = await mkdtemp(join(tmpdir(), "orkestr-browser-mission-"));
   const workspace = join(directory, "workspace");
   await cp(join(root, "demo/workspace"), workspace, { recursive: true });
@@ -56,29 +56,44 @@ test("runs a persistent browser mission through the complete backend loop", asyn
     assert.equal(typeof login.csrfToken, "string");
 
     const setup = await jsonRequest(port, "/api/setup/status", cookie);
-    assert.equal(setup.firstMissionReady, true);
+    assert.equal(setup.ready, true);
     assert.equal(setup.codex.selectedModel, "gpt-5.6");
 
-    const created = await jsonRequest(port, "/api/missions", cookie, {
+    await jsonRequest(port, "/api/conversation/complete-setup", cookie, {
+      method: "POST",
+      csrfToken: login.csrfToken,
+    });
+    const created = await jsonRequest(port, "/api/turns", cookie, {
       method: "POST",
       csrfToken: login.csrfToken,
       body: {
         source: "demo",
-        prompt:
+        clientMessageId: "integration-browser-draft-1",
+        content:
           "Find the failing test, identify the cause, implement the smallest correct fix, run the tests, and explain the change.",
       },
     });
     assert.equal(created.status, "queued");
+    const duplicate = await jsonRequest(port, "/api/turns", cookie, {
+      method: "POST",
+      csrfToken: login.csrfToken,
+      body: {
+        source: "demo",
+        clientMessageId: "integration-browser-draft-1",
+        content:
+          "Find the failing test, identify the cause, implement the smallest correct fix, run the tests, and explain the change.",
+      },
+    });
+    assert.equal(duplicate.id, created.id);
 
     let mission;
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      mission = await jsonRequest(port, `/api/missions/${created.id}`, cookie);
+      const turns = await jsonRequest(port, "/api/turns", cookie);
+      mission = turns.data.find((turn) => turn.id === created.id);
       if (["completed", "failed"].includes(mission.status)) break;
       await delay(25);
     }
     assert.equal(mission?.status, "completed", logs);
-    assert.equal(mission.requestedModel, "gpt-5.6");
-    assert.equal(mission.effectiveModel, "gpt-5.6-effective");
     assert.match(mission.finalResponse, /three tests pass/);
     assert.match(
       await readFile(join(workspace, "src/clamp.js"), "utf8"),
@@ -93,28 +108,52 @@ test("runs a persistent browser mission through the complete backend loop", asyn
     );
     assert.match(testResult.stdout, /pass 3/);
 
-    const rerouted = await jsonRequest(port, "/api/missions", cookie, {
+    const rerouted = await jsonRequest(port, "/api/turns", cookie, {
       method: "POST",
       csrfToken: login.csrfToken,
       body: {
         source: "demo",
-        prompt:
+        content:
           "Verify model reroute provenance without changing unrelated files.",
       },
     });
     let reroutedMission;
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      reroutedMission = await jsonRequest(
-        port,
-        `/api/missions/${rerouted.id}`,
-        cookie,
-      );
+      const turns = await jsonRequest(port, "/api/turns", cookie);
+      reroutedMission = turns.data.find((turn) => turn.id === rerouted.id);
       if (["completed", "failed"].includes(reroutedMission.status)) break;
       await delay(25);
     }
     assert.equal(reroutedMission?.status, "completed", logs);
-    assert.equal(reroutedMission.requestedModel, "gpt-5.6");
-    assert.equal(reroutedMission.effectiveModel, "gpt-5.6-rerouted");
+    const [firstInternal, secondInternal] = await Promise.all([
+      jsonRequest(port, `/api/missions/${created.id}`, cookie),
+      jsonRequest(port, `/api/missions/${rerouted.id}`, cookie),
+    ]);
+    assert.equal(firstInternal.codexThreadId, secondInternal.codexThreadId);
+    assert.equal(firstInternal.requestedModel, "gpt-5.6");
+    assert.equal(firstInternal.effectiveModel, "gpt-5.6-effective");
+    assert.equal(secondInternal.effectiveModel, "gpt-5.6-rerouted");
+
+    const newest = await jsonRequest(port, "/api/turns?limit=1", cookie);
+    assert.deepEqual(
+      newest.data.map((turn) => turn.id),
+      [rerouted.id],
+    );
+    const older = await jsonRequest(
+      port,
+      `/api/turns?limit=1&before=${newest.nextCursor}`,
+      cookie,
+    );
+    assert.deepEqual(
+      older.data.map((turn) => turn.id),
+      [created.id],
+    );
+    const permalink = await jsonRequest(
+      port,
+      `/api/turns/${created.id}`,
+      cookie,
+    );
+    assert.equal(permalink.finalResponse, mission.finalResponse);
   } finally {
     child.kill("SIGTERM");
     await Promise.race([

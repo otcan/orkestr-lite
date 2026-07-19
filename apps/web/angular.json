@@ -17,7 +17,7 @@
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "assets": [{ "glob": "**/*", "input": "public" }],
-            "styles": ["src/styles.css"]
+            "styles": ["@xterm/xterm/css/xterm.css", "src/styles.css"]
           },
           "configurations": {
             "production": {

@@ -88,6 +88,7 @@ input.on("line", (line) => {
           method: "model/rerouted",
           params: {
             threadId: message.params.threadId,
+            turnId,
             fromModel: thread.model,
             toModel: rerouteModel,
           },

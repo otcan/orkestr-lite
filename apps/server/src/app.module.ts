@@ -7,6 +7,8 @@ import { readRuntimeConfig } from "./config/runtime-config.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { MissionsModule } from "./missions/missions.module.js";
 import { SystemModule } from "./system/system.module.js";
+import { TerminalModule } from "./terminal/terminal.module.js";
+import { DeskModule } from "./desk/desk.module.js";
 
 const runtime = readRuntimeConfig();
 
@@ -18,6 +20,8 @@ const runtime = readRuntimeConfig();
     CodexModule,
     MissionsModule,
     SystemModule,
+    TerminalModule,
+    DeskModule,
     ServeStaticModule.forRoot({
       rootPath: runtime.publicDir,
       exclude: ["/api/{*splat}"],

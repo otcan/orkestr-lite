@@ -11,7 +11,7 @@ const root = resolve(import.meta.dirname, "../..");
 const fakeCodex = join(root, "test/fixtures/fake-codex.mjs");
 const mediaDirectory = process.env.ORKESTR_CAPTURE_MEDIA_DIR?.trim();
 
-test("runs the complete browser mission experience", async ({ page }) => {
+test("runs one persistent conversation from the browser", async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), "orkestr-browser-e2e-"));
   const workspace = join(directory, "workspace");
   await cp(join(root, "demo/workspace"), workspace, { recursive: true });
@@ -45,46 +45,58 @@ test("runs the complete browser mission experience", async ({ page }) => {
       .getByLabel("Administrator password")
       .fill("browser-e2e-password");
     await page.getByRole("button", { name: "Open workstation" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Persistent Codex work" }),
-    ).toBeVisible();
+    await expect(page.getByText("Workstation setup")).toBeVisible();
 
-    await page.getByRole("link", { name: "Setup", exact: true }).click();
-    const firstMission = page.locator(".check-row").filter({
-      has: page.getByRole("heading", { name: "First mission ready" }),
-    });
-    await expect(firstMission).toContainText("Ready");
-    const codexConnection = page.locator(".check-row").filter({
-      has: page.getByRole("heading", { name: "Codex connected" }),
-    });
+    await expect(page.getByText("System ready")).toHaveCount(0);
+    await expect(page.getByText("Workspace mounted")).toHaveCount(0);
+    const codexConnection = page.locator(".setup-connection").first();
+    await expect(
+      page.getByRole("heading", { name: "Codex connected" }),
+    ).toBeVisible();
+    await expect(codexConnection).toContainText("Connected");
     await expect(codexConnection).toContainText("gpt-5.6");
+    const whatsappConnection = page
+      .locator(".setup-connection")
+      .filter({ hasText: "WhatsApp linked device" });
+    await expect(whatsappConnection).toContainText("Link WhatsApp");
+    await expect(
+      whatsappConnection.getByRole("button", { name: "Link WhatsApp" }),
+    ).toBeVisible();
     await captureMedia(page, "setup-ready.png");
 
-    await page.getByRole("link", { name: "Start your first mission" }).click();
+    await page.getByRole("button", { name: "Open Orkestr" }).click();
+    await expect(page).toHaveURL(`http://127.0.0.1:${port}/chat`);
+    await expect(
+      page.getByRole("heading", { name: "What should Codex do?" }),
+    ).toBeVisible();
+    await expect(page.getByText("Mission", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Thread", { exact: true })).toHaveCount(0);
     await page
-      .getByPlaceholder("Describe a concrete outcome for Codex…")
+      .getByPlaceholder("Message Codex…")
       .fill(
         "Find the failing test, implement the smallest correct fix, run the tests, and explain the change.",
       );
-    await page.getByRole("button", { name: "Create mission" }).click();
+    await page.getByRole("button", { name: "Send", exact: true }).click();
 
-    await expect(page).toHaveURL(/\/missions\/[0-9a-f-]+$/);
-    const status = page.locator(".status-badge.large");
-    await expect(status).toHaveAttribute("data-status", "completed", {
+    await expect(page).toHaveURL(
+      new RegExp(`http://127\\.0\\.0\\.1:${port}/chat/[0-9a-f-]+`),
+    );
+    await expect(page.getByText("Thread", { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/Completed in \d+ seconds/)).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText("Workspace diff updated")).toBeVisible();
     await expect(page.getByText("3 tests passed")).toBeVisible();
-    await expect(page.locator(".final-response")).toContainText(
+    await expect(page.locator(".codex-message")).toContainText(
       "Corrected the reversed clamp bounds",
     );
-    await page.reload();
-    await expect(page.locator(".status-badge.large")).toHaveAttribute(
-      "data-status",
-      "completed",
+    await expect(page.locator(".activity-timeline")).toContainText(
+      "Response completed",
     );
-    await expect(page.getByText("Workspace diff updated")).toBeVisible();
-    await captureMedia(page, "mission-complete.png");
+    await page.reload();
+    await expect(page.locator(".codex-message")).toContainText(
+      "Corrected the reversed clamp bounds",
+    );
+    await captureMedia(page, "conversation-complete.png");
 
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page.getByLabel("Administrator password")).toBeVisible();

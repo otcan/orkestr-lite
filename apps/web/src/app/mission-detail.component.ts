@@ -9,7 +9,7 @@ import { ApiService, errorText } from "./api.service";
   imports: [DatePipe, JsonPipe, RouterLink],
   template: `
     <main class="page detail-page">
-      <a class="back-link" routerLink="/missions">← All missions</a>
+      <a class="back-link" routerLink="/mission">← Mission workspace</a>
       @if (error) {
         <div class="callout error" role="alert">{{ error }}</div>
       }
@@ -54,9 +54,6 @@ import { ApiService, errorText } from "./api.service";
 
         <section class="mission-facts panel">
           <div>
-            <span>Source</span><strong>{{ mission.source }}</strong>
-          </div>
-          <div>
             <span>Requested model</span
             ><strong>{{ mission.requestedModel || "—" }}</strong>
           </div>
@@ -68,12 +65,6 @@ import { ApiService, errorText } from "./api.service";
             <span>Started</span
             ><strong>{{
               (mission.startedAt | date: "medium") || "Queued"
-            }}</strong>
-          </div>
-          <div>
-            <span>Thread</span
-            ><strong class="mono truncate">{{
-              mission.codexThreadId || "Waiting"
             }}</strong>
           </div>
         </section>
@@ -263,8 +254,8 @@ export class MissionDetailComponent implements OnInit, OnDestroy {
     const titles: Record<string, string> = {
       "mission.queued": "Mission queued",
       "mission.starting": "Starting Codex",
-      "codex.thread_started": "Codex thread created",
-      "codex.thread_resumed": "Codex thread resumed",
+      "codex.thread_started": "Codex session started",
+      "codex.thread_resumed": "Codex session resumed",
       "codex.turn_started": "Codex turn started",
       "turn/started": "Work started",
       "turn/plan/updated": "Plan updated",

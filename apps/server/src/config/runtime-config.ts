@@ -6,6 +6,8 @@ export interface RuntimeConfig {
   home: string;
   codexHome: string;
   workspace: string;
+  /** Optional on legacy test fixtures; readRuntimeConfig always supplies it. */
+  filesRoot?: string;
   databasePath: string;
   requestedModel: string;
   adminPassword?: string;
@@ -14,6 +16,14 @@ export interface RuntimeConfig {
   codexCommand: string;
   codexVersion: string;
   publicDir: string;
+  /** Optional on hand-built test fixtures; readRuntimeConfig always supplies it. */
+  deskUrl?: string | null;
+  /** Optional on hand-built test fixtures; readRuntimeConfig always supplies it. */
+  deskVncUrl?: string | null;
+  /** Optional on hand-built test fixtures; readRuntimeConfig always supplies it. */
+  deskTokenFile?: string;
+  /** Optional on hand-built test fixtures; readRuntimeConfig always supplies it. */
+  codexTransport?: "auto" | "local" | "desk";
 }
 
 export function readRuntimeConfig(): RuntimeConfig {
@@ -41,6 +51,7 @@ export function readRuntimeConfig(): RuntimeConfig {
     home,
     codexHome: resolve(process.env.CODEX_HOME ?? `${home}/codex`),
     workspace,
+    filesRoot: resolve(process.env.ORKESTR_FILES_ROOT ?? "/"),
     databasePath: resolve(
       process.env.ORKESTR_DATABASE ?? `${home}/orkestr.sqlite`,
     ),
@@ -51,7 +62,31 @@ export function readRuntimeConfig(): RuntimeConfig {
     codexCommand: process.env.ORKESTR_CODEX_COMMAND ?? "codex",
     codexVersion: process.env.ORKESTR_CODEX_VERSION ?? "0.144.5",
     publicDir: resolve(process.env.ORKESTR_PUBLIC_DIR ?? "./dist/web/browser"),
+    deskUrl: optionalUrl(process.env.ORKESTR_DESK_URL),
+    deskVncUrl: optionalUrl(process.env.ORKESTR_DESK_VNC_URL),
+    deskTokenFile: resolve(
+      process.env.ORKESTR_DESK_TOKEN_FILE ?? "/run/orkestr-desk-auth/token",
+    ),
+    codexTransport: codexTransport(process.env.ORKESTR_CODEX_TRANSPORT),
   };
+}
+
+function optionalUrl(value: string | undefined): string | null {
+  const candidate = value?.trim();
+  if (!candidate) return null;
+  const url = new URL(candidate);
+  if (!["http:", "https:", "ws:", "wss:"].includes(url.protocol)) {
+    throw new Error(`Unsupported internal URL protocol: ${url.protocol}`);
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+function codexTransport(value: string | undefined): "auto" | "local" | "desk" {
+  const candidate = value?.trim().toLowerCase() || "auto";
+  if (candidate === "auto" || candidate === "local" || candidate === "desk") {
+    return candidate;
+  }
+  throw new Error(`Invalid ORKESTR_CODEX_TRANSPORT: ${value}`);
 }
 
 function parsePort(value: string | undefined): number {

@@ -8,145 +8,129 @@ import { ApiService, errorText } from "./api.service";
   standalone: true,
   imports: [DatePipe, DecimalPipe, RouterLink],
   template: `
-    <main class="page">
+    <main class="page narrow">
       <header class="page-header">
         <div>
-          <p class="eyebrow">Mission control</p>
-          <h1>Persistent Codex work</h1>
+          <p class="eyebrow">Mission workspace</p>
+          <h1>One focused mission</h1>
           <p class="muted">
-            One mission runs at a time. Everything else waits safely in the
-            queue.
+            Give Codex one bounded outcome and stay with it through completion.
           </p>
         </div>
-        <a class="quiet button-link" routerLink="/setup">Setup diagnostics</a>
       </header>
 
-      <section class="mission-composer panel">
-        <div class="composer-heading">
-          <div>
-            <span class="live-dot"></span>
-            <strong>New mission</strong>
-          </div>
-          <span class="model-label">GPT-5.6 verified at dispatch</span>
-        </div>
-        <form (submit)="create(); $event.preventDefault()">
-          <textarea
-            name="prompt"
-            [value]="prompt()"
-            (input)="prompt.set($any($event.target).value)"
-            rows="5"
-            maxlength="32000"
-            placeholder="Describe a concrete outcome for Codex…"
-            required
-          ></textarea>
-          <div class="composer-footer">
-            <span>{{ prompt().length | number }} / 32,000</span>
-            <button
-              class="primary"
-              type="submit"
-              [disabled]="busy || !prompt().trim()"
-            >
-              {{ busy ? "Queueing…" : "Create mission" }}
-            </button>
-          </div>
-        </form>
-        @if (error) {
-          <p class="error" role="alert">{{ error }}</p>
-        }
-      </section>
+      @if (error) {
+        <div class="callout error" role="alert">{{ error }}</div>
+      }
 
-      @if (activeMission) {
-        <section class="section-block">
+      @if (currentMission) {
+        <section class="section-block current-mission">
           <div class="section-heading">
-            <h2>Active mission</h2>
-            <span>Live</span>
+            <h2>Current mission</h2>
+            <span>One at a time</span>
           </div>
           <a
             class="mission-card active-card"
-            [routerLink]="['/missions', activeMission.id]"
+            [routerLink]="['/mission', currentMission.id]"
           >
             <div>
               <span
                 class="status-badge"
-                [attr.data-status]="activeMission.status"
-                >{{ activeMission.status }}</span
+                [attr.data-status]="currentMission.status"
+                >{{ currentMission.status }}</span
               >
-              <h3>{{ activeMission.title }}</h3>
+              <h3>{{ currentMission.title }}</h3>
               <p>
                 {{
-                  activeMission.latestProgressSummary ||
+                  currentMission.latestProgressSummary ||
                     "Codex is preparing the mission"
                 }}
               </p>
             </div>
             <div class="mission-meta">
               <span>{{
-                activeMission.effectiveModel || activeMission.requestedModel
+                currentMission.effectiveModel || currentMission.requestedModel
               }}</span>
-              <span>{{ activeMission.startedAt | date: "mediumTime" }}</span>
+              <span>{{ currentMission.startedAt | date: "mediumTime" }}</span>
             </div>
           </a>
+          <p class="single-mission-note muted">
+            Finish or resume this mission before starting another.
+          </p>
+        </section>
+      } @else {
+        <section class="mission-composer panel">
+          <div class="composer-heading">
+            <div>
+              <span class="live-dot"></span>
+              <strong>Mission brief</strong>
+            </div>
+            <span class="model-label">GPT-5.6 verified at start</span>
+          </div>
+          <form (submit)="create(); $event.preventDefault()">
+            <textarea
+              name="prompt"
+              [value]="prompt()"
+              (input)="prompt.set($any($event.target).value)"
+              rows="6"
+              maxlength="32000"
+              placeholder="Describe a concrete outcome for Codex…"
+              required
+            ></textarea>
+            <div class="composer-footer">
+              <span>{{ prompt().length | number }} / 32,000</span>
+              <button
+                class="primary"
+                type="submit"
+                [disabled]="busy || !prompt().trim()"
+              >
+                {{ busy ? "Starting…" : "Start mission" }}
+              </button>
+            </div>
+          </form>
         </section>
       }
 
-      @if (queuedMissions.length) {
+      @if (!currentMission) {
         <section class="section-block">
           <div class="section-heading">
-            <h2>Queue</h2>
-            <span>{{ queuedMissions.length }}</span>
+            <h2>Most recent mission</h2>
           </div>
-          <div class="mission-list">
-            @for (mission of queuedMissions; track mission.id) {
-              <a class="mission-row" [routerLink]="['/missions', mission.id]">
-                <span class="queue-position">{{ $index + 1 }}</span>
-                <div>
-                  <strong>{{ mission.title }}</strong>
-                  <p>Queued {{ mission.createdAt | date: "shortTime" }}</p>
-                </div>
-                <span class="status-badge" data-status="queued">queued</span>
-              </a>
-            }
-          </div>
-        </section>
-      }
-
-      <section class="section-block">
-        <div class="section-heading">
-          <h2>Mission history</h2>
-          <span>{{ previousMissions.length }}</span>
-        </div>
-        @if (!missions.length) {
-          <div class="empty-state panel">
-            <strong>No missions yet</strong>
-            <p>
-              Connect Codex in Setup, then create the first operational mission.
-            </p>
-          </div>
-        } @else {
-          <div class="mission-list panel flush">
-            @for (mission of previousMissions; track mission.id) {
-              <a class="mission-row" [routerLink]="['/missions', mission.id]">
-                <span
-                  class="status-icon"
-                  [attr.data-status]="mission.status"
-                ></span>
-                <div>
-                  <strong>{{ mission.title }}</strong>
-                  <p>
-                    {{ mission.source }} ·
-                    {{ mission.createdAt | date: "medium" }}
-                  </p>
-                </div>
+          @if (!latestMission) {
+            <div class="empty-state panel">
+              <strong>Ready for the first mission</strong>
+              <p>
+                Complete workstation setup, then describe one concrete outcome
+                above.
+              </p>
+            </div>
+          } @else {
+            <a
+              class="mission-card"
+              [routerLink]="['/mission', latestMission.id]"
+            >
+              <div>
                 <span
                   class="status-badge"
-                  [attr.data-status]="mission.status"
-                  >{{ mission.status }}</span
+                  [attr.data-status]="latestMission.status"
+                  >{{ latestMission.status }}</span
                 >
-              </a>
-            }
-          </div>
-        }
-      </section>
+                <h3>{{ latestMission.title }}</h3>
+                <p>
+                  {{
+                    latestMission.finalResponse ||
+                      latestMission.error ||
+                      "Open the mission result"
+                  }}
+                </p>
+              </div>
+              <div class="mission-meta">
+                <span>{{ latestMission.createdAt | date: "medium" }}</span>
+              </div>
+            </a>
+          }
+        </section>
+      }
     </main>
   `,
 })
@@ -174,23 +158,20 @@ export class MissionsComponent implements OnInit, OnDestroy {
     return this.errorState();
   }
 
-  get activeMission(): MissionRecord | undefined {
+  get currentMission(): MissionRecord | undefined {
     return this.missions.find((mission) =>
-      ["starting", "running", "awaiting_approval"].includes(mission.status),
+      [
+        "queued",
+        "starting",
+        "running",
+        "awaiting_approval",
+        "interrupted",
+      ].includes(mission.status),
     );
   }
 
-  get queuedMissions(): MissionRecord[] {
-    return this.missions
-      .filter((mission) => mission.status === "queued")
-      .reverse();
-  }
-
-  get previousMissions(): MissionRecord[] {
-    return this.missions.filter(
-      (mission) =>
-        mission.id !== this.activeMission?.id && mission.status !== "queued",
-    );
+  get latestMission(): MissionRecord | undefined {
+    return this.missions[0];
   }
 
   ngOnInit(): void {
@@ -211,7 +192,7 @@ export class MissionsComponent implements OnInit, OnDestroy {
         source: "web",
       });
       this.prompt.set("");
-      await this.router.navigate(["/missions", mission.id]);
+      await this.router.navigate(["/mission", mission.id]);
     } catch (error) {
       this.errorState.set(errorText(error));
     } finally {

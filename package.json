@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Run persistent Codex missions from your browser.",
+  "description": "Run one persistent Codex workspace from your browser or WhatsApp.",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=22 <23"

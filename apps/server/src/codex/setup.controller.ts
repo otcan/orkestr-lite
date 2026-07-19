@@ -5,31 +5,21 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
-  Inject,
   Post,
 } from "@nestjs/common";
 import { apiKeyLoginSchema } from "@orkestr/shared";
-import { RUNTIME_CONFIG } from "../config/config.module.js";
-import type { RuntimeConfig } from "../config/runtime-config.js";
-import { DatabaseService } from "../database/database.service.js";
 import { CodexService } from "./codex.service.js";
 
 @Controller("api/setup")
 export class SetupController {
-  constructor(
-    private readonly codex: CodexService,
-    private readonly database: DatabaseService,
-    @Inject(RUNTIME_CONFIG) private readonly config: RuntimeConfig,
-  ) {}
+  constructor(private readonly codex: CodexService) {}
 
   @Get("status")
   status() {
     const codex = this.codex.snapshot();
     return {
-      system: { ready: this.database.ping() },
       codex,
-      workspace: { ready: true, path: this.config.workspace },
-      firstMissionReady:
+      ready:
         codex.process === "ready" && codex.authenticated && codex.modelReady,
     };
   }

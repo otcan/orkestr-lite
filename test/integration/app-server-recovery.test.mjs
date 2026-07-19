@@ -11,7 +11,7 @@ const root = resolve(import.meta.dirname, "../..");
 const fakeCodex = join(root, "test/fixtures/fake-codex.mjs");
 
 test(
-  "interrupts the active mission and resumes the queue after app-server exits",
+  "recovers the active mission once and resumes the queue after app-server exits",
   { timeout: 20_000 },
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "orkestr-codex-recovery-"));
@@ -51,7 +51,7 @@ test(
         const firstState = await getMission(origin, session.cookie, first.id);
         const secondState = await getMission(origin, session.cookie, second.id);
         if (
-          firstState.status === "interrupted" &&
+          firstState.status === "completed" &&
           secondState.status === "completed"
         ) {
           return { firstState, secondState };
@@ -68,6 +68,7 @@ test(
         "running",
       );
       assert.ok(result.firstState.codexThreadId);
+      assert.equal(result.firstState.error, null);
       assert.equal(result.secondState.error, null);
 
       const database = new Database(databasePath, { readonly: true });
@@ -78,6 +79,12 @@ test(
           )
           .get(first.id).count;
         assert.equal(interruptionCount, 1);
+        const recoveryCount = database
+          .prepare(
+            "SELECT count(*) AS count FROM mission_events WHERE mission_id = ? AND kind = 'mission.recovery_queued'",
+          )
+          .get(first.id).count;
+        assert.equal(recoveryCount, 1);
       } finally {
         database.close();
       }

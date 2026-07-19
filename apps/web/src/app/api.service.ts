@@ -43,6 +43,16 @@ export class ApiService {
     );
   }
 
+  patch<T>(path: string, body: unknown = {}): Promise<T> {
+    return firstValueFrom(
+      this.http.patch<T>(path, body, this.mutationOptions()),
+    );
+  }
+
+  delete<T>(path: string): Promise<T> {
+    return firstValueFrom(this.http.delete<T>(path, this.mutationOptions()));
+  }
+
   createMission(input: CreateMissionInput): Promise<MissionRecord> {
     return this.post<MissionRecord>("/api/missions", input);
   }

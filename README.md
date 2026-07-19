@@ -1,6 +1,6 @@
 # Orkestr Lite
 
-> Persistent Codex coding missions, with the operational truth left intact.
+> Run one persistent Codex workspace from your browser or WhatsApp.
 
 [![CI](https://github.com/otcan/orkestr-lite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/otcan/orkestr-lite/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/otcan/orkestr-lite?label=release)](https://github.com/otcan/orkestr-lite/releases/tag/v0.1.0-build-week)
@@ -11,7 +11,9 @@
 
 _Illustrative campaign artwork; an authentic live product capture appears below._
 
-Orkestr Lite is a browser-operated control plane for real Codex work. Give it a bounded repository mission, follow commands, approvals, progress, and diffs live, then return to a durable record even if the Codex process or container restarts.
+Orkestr Lite gives one workspace one persistent Codex conversation. Browser prompts, WhatsApp self-messages, and scheduled messages enter the same sequential queue; useful progress, approvals, terminal output, and Git changes stay available in one place.
+
+The current source image is an Ubuntu 24.04 workstation with tmux, Git, ripgrep, editors, network diagnostics, and a real PTY. Chat accepts downloadable files, and the Files page can browse, download, upload, or send eligible files to WhatsApp.
 
 Built for the **Developer Tools** track of [OpenAI Build Week](https://openai.devpost.com/), it focuses on one hard problem: making agentic coding work observable and recoverable without turning Codex into a generic chat window.
 
@@ -32,9 +34,31 @@ Open <http://localhost:3000>, sign in with the generated administrator password 
 
 The image is an immutable, public Linux AMD64 build with GitHub artifact attestation. Its health, authentication, unprivileged runtime, restart behavior, and persisted data were smoke-tested at the published digest. See the [release contract](docs/RELEASE.md) for verification and the source-build fallback.
 
+## Link WhatsApp from `main`
+
+The current source build includes a built-in WhatsApp linked-device connector. On the Workstation setup screen, choose **Link WhatsApp**, then scan the QR code from WhatsApp → **Linked devices** → **Link a device**. Send any text to your own WhatsApp chat; it enters the same conversation and queue as browser messages, and Orkestr sends the result back to that chat. Browser and scheduled replies are mirrored there too. The linked-device session is stored privately in the `/data` volume and can be removed with **Unlink**.
+
+The frozen `v0.1.0-build-week` image above predates this connector, so build `main` with `docker compose up --build` to use it.
+
+## Optional Live Desk
+
+Give Codex a persistent graphical Ubuntu desktop with Chromium, XFCE, a terminal, a file manager, and human takeover:
+
+```bash
+docker compose --profile desk up --build
+```
+
+Open **Desk** in the navigation to watch Codex's workstation, open the persistent browser, enter full screen, or take exclusive keyboard and mouse control. The regular headless installation remains:
+
+```bash
+docker compose up --build
+```
+
+Only port 3000 is published. The VNC stream and Desk agent remain on the private Compose network and are proxied through the authenticated Orkestr API. Desk, browser, Codex, and workspace data persist in separate named volumes. The Desk is an isolated desktop container—not a virtual machine or a hard multi-tenant security boundary.
+
 ## See the complete loop
 
-The seeded workspace starts with one intentionally failing test. Create a mission with:
+The seeded workspace starts with one intentionally failing test. Send:
 
 > Find the failing test in this workspace, implement the smallest correct fix, run the tests, and explain the change. Do not modify dependencies or files unrelated to the failure.
 
@@ -70,17 +94,22 @@ The intentionally narrow contract—one user, one container, one workspace, one 
 flowchart LR
     Browser[Angular mission UI]
 
-    subgraph Container[Hardened Orkestr container]
+    subgraph Control[Orkestr control container]
         API[NestJS control plane]
         DB[(SQLite WAL<br/>missions + events)]
-        Codex[Codex app-server<br/>JSONL over stdio]
+    end
+
+    subgraph Desk[Optional Ubuntu Live Desk]
+        Codex[Codex app-server]
+        Desktop[XFCE + Chromium + terminal]
     end
 
     Workspace[(Mounted Git workspace)]
 
     Browser -->|session API + replayable SSE| API
     API -->|state transitions| DB
-    API -->|thread, turn, approval| Codex
+    API -->|private authenticated JSONL bridge| Codex
+    API -->|authenticated VNC proxy| Desktop
     Codex -->|bounded workspace writes| Workspace
     API -->|diff inspection| Workspace
 ```
@@ -163,7 +192,7 @@ Reset the disposable seeded workspace with `node demo/reset-demo.mjs`. Do not us
 
 ## Scope and safety
 
-The competition build is single-user, loopback-only by default, and targets Linux AMD64. It requires the user's own eligible Codex authentication and is not a hosted multi-tenant service. Workspace inspection, multiple workspaces, a PTY terminal, timers, and WhatsApp routing are later milestones.
+The source build is single-user and loopback-only by default. It includes one persistent Codex conversation, browser and WhatsApp attachments, a whole-container file browser with uploads, a real PTY terminal, WhatsApp self-chat routing, one-time/hourly/daily/weekly timers, and the optional Live Desk. It requires the user's own eligible Codex authentication and is not a hosted multi-tenant service. Hosted-judge isolation and a new published release image remain separate release work.
 
 Treat access to Orkestr Lite as equivalent to shell access to its mounted workspace. Never expose port 3000 directly to the public internet; read [Security](SECURITY.md) before changing the deployment boundary.
 

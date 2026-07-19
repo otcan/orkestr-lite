@@ -26,6 +26,10 @@ export interface CodexModel {
   hidden: boolean;
   isDefault: boolean;
   defaultReasoningEffort?: string;
+  supportedReasoningEfforts?: Array<{
+    reasoningEffort: string;
+    description: string;
+  }>;
 }
 
 export interface AccountReadResult {
@@ -68,6 +72,8 @@ export interface CodexClientOptions {
   codexHome: string;
   requestTimeoutMs?: number;
   expectedVersion?: string;
+  remoteUrl?: string;
+  remoteToken?: string;
 }
 
 export interface CodexServerRequest {
