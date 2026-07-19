@@ -144,7 +144,7 @@ ORKESTR_IMAGE="ghcr.io/otcan/orkestr-lite@sha256:026beb20c20f92b226424ffa32316b7
 ORKESTR_IMAGE="ghcr.io/otcan/orkestr-lite@sha256:026beb20c20f92b226424ffa32316b7a9b0fe2fb26461aae0d95df3960657e9b" docker compose up -d --no-build
 ```
 
-Open <http://localhost:3000>, read the generated administrator password from the local container logs, authenticate Codex, and confirm GPT-5.6 readiness. The seeded workspace and exact bounded mission are documented in [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). Inspect the result with:
+Open <http://localhost:3000>, read the generated administrator password from the local container logs, authenticate Codex, and confirm GPT-5.6 readiness. The seeded workspace and exact bounded mission are documented in [the demo runbook](../DEMO.md). Inspect the result with:
 
 ```bash
 docker compose exec orkestr git -C /workspace diff

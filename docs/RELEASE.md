@@ -1,4 +1,4 @@
-# Orkestr Lite release contract
+# Release contract
 
 Build Week releases are immutable source tags paired with one Linux AMD64 container digest and a public GitHub release. The GitHub release notes are the canonical record of the tag, source commit, image digest, and provenance.
 
