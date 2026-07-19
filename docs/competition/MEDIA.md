@@ -23,7 +23,7 @@ npm run media:capture
 
 ## Final video package
 
-Follow [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) and target 2:40–2:50. The final public YouTube upload must:
+Follow [the demo runbook](../DEMO.md) and target 2:40–2:50. The final public YouTube upload must:
 
 - show the live authenticated GPT-5.6 mission, workspace change, and three passing tests;
 - include continuous English narration explaining the product, Codex build workflow, and GPT-5.6 runtime role;

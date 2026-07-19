@@ -1,4 +1,4 @@
-# Orkestr Lite judge and demo runbook
+# Judge and demo runbook
 
 This is the canonical walkthrough for the OpenAI Build Week submission. It is designed for a public video under three minutes and for a judge running the repository on Linux AMD64.
 
@@ -85,7 +85,7 @@ Keep narration continuous. Do not wait silently for a live mission; cut dead tim
 7. Inspect the result with `docker compose exec orkestr git -C /workspace diff`.
 8. Run `docker compose exec orkestr node --test /workspace/test/clamp.test.js` and confirm all three tests pass.
 
-The default port is loopback-only. A hosted judge instance must use authenticated HTTPS and `ORKESTR_COOKIE_SECURE=true` as described in [SECURITY.md](SECURITY.md).
+The default port is loopback-only. A hosted judge instance must use authenticated HTTPS and `ORKESTR_COOKIE_SECURE=true` as described in [SECURITY.md](../SECURITY.md).
 
 ## Evidence to capture
 
@@ -121,4 +121,4 @@ Keep these non-secret artifacts together for the submission:
 - [ ] Entry is submitted before July 21, 2026 at 17:00 PT.
 - [ ] Confirmation ID/timestamp are saved and the project remains available through judging.
 
-Official requirements and dates are linked from [HACKATHON.md](HACKATHON.md). If an organizer update conflicts with this runbook, the official rules control.
+Official requirements and dates are linked from the [competition checklist](competition/CHECKLIST.md). If an organizer update conflicts with this runbook, the official rules control.

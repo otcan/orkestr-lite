@@ -122,9 +122,9 @@ The tag and container are the immutable competition build. This post-freeze docu
 - primary Codex implementation thread `/feedback` session ID
 - runnable judge path that does not require rebuilding from scratch
 
-See [HACKATHON.md](HACKATHON.md) for the release and submission checklist.
+See [CHECKLIST.md](CHECKLIST.md) for the release and submission checklist.
 
-The immutable tag, image, provenance, smoke test, and amendment process are defined in [RELEASE.md](RELEASE.md). The GitHub release notes record the final source commit and image digest.
+The immutable tag, image, provenance, smoke test, and amendment process are defined in [the release contract](../RELEASE.md). The GitHub release notes record the final source commit and image digest.
 
 ## Known limitations
 
