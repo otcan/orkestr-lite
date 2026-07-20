@@ -1,178 +1,179 @@
 # Orkestr Lite
 
-> Run one persistent Codex workspace from your browser or WhatsApp.
+> **An always-on Codex workstation you can reach from the browser or WhatsApp.**
 
 [![CI](https://github.com/otcan/orkestr-lite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/otcan/orkestr-lite/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/otcan/orkestr-lite?label=release)](https://github.com/otcan/orkestr-lite/releases/tag/v0.1.0-build-week)
 [![License](https://img.shields.io/github/license/otcan/orkestr-lite)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Linux%20AMD64-8ef0b5)
+[![OpenAI Build Week](https://img.shields.io/badge/OpenAI-Build%20Week-111827)](https://openai.devpost.com/)
 
-![Orkestr Lite — persistent Codex missions](assets/submission/devpost-thumbnail.png)
+Codex can do serious agentic work. The unreliable part is everything around it: keeping a machine available, running work on a schedule, preserving browser state, connecting messaging, recovering after disconnects, and bringing the human back when judgment is needed.
 
-_Illustrative campaign artwork; an authentic live product capture appears below._
+**Orkestr Lite packages that operational layer into one self-hosted Docker application.**
 
-Orkestr Lite gives one workspace one persistent Codex conversation. Browser prompts, WhatsApp self-messages, and scheduled messages enter the same sequential queue; useful progress, approvals, terminal output, and Git changes stay available in one place.
+Send work manually, from your own WhatsApp chat, or on a timer. Codex handles it inside a persistent Ubuntu workstation. Watch the desktop live, take control when needed, and come back to the same conversation, browser, files, terminal, and results.
 
-The current source image is an Ubuntu 24.04 workstation with tmux, Git, ripgrep, editors, network diagnostics, and a real PTY. Chat accepts downloadable files, and the Files page can browse, download, upload, or send eligible files to WhatsApp.
+**Codex does the work. Orkestr keeps the workstation running.**
 
-Built for the **Developer Tools** track of [OpenAI Build Week](https://openai.devpost.com/), it focuses on one hard problem: making agentic coding work observable and recoverable without turning Codex into a generic chat window.
+## One workstation, one continuous thread
 
-## Try the frozen release without rebuilding
+Orkestr Lite deliberately avoids project hierarchies and orchestration graphs. It gives one user one continuous Codex conversation attached to one persistent workspace.
 
-Requirements: Linux AMD64, Docker Engine, Docker Compose v2, and a Codex account with an eligible GPT-5.6 model.
+```mermaid
+flowchart LR
+    Web["Browser"] --> Orkestr["Orkestr Lite"]
+    WhatsApp["WhatsApp self-chat"] --> Orkestr
+    Schedule["Once, hourly, daily, weekly"] --> Orkestr
 
-```bash
-git clone --branch v0.1.0-build-week --depth 1 https://github.com/otcan/orkestr-lite.git
-cd orkestr-lite
-export ORKESTR_IMAGE="ghcr.io/otcan/orkestr-lite@sha256:026beb20c20f92b226424ffa32316b7a9b0fe2fb26461aae0d95df3960657e9b"
-docker compose pull orkestr
-docker compose up -d --no-build
-docker compose logs orkestr
+    Orkestr --> Codex["One Codex conversation"]
+    Codex --> Desk["Persistent Ubuntu workstation"]
+
+    Desk --> Browser["Chromium"]
+    Desk --> Terminal["Terminal"]
+    Desk --> Files["Files"]
+
+    Codex --> Results["History and results"]
+    Results --> Web
+    Results --> WhatsApp
 ```
 
-Open <http://localhost:3000>, sign in with the generated administrator password shown once in the logs, and authenticate Codex. Application state and the seeded Git workspace persist in Docker volumes.
+Every input enters the same sequential queue and reaches the same context. Work started from WhatsApp is visible in the browser. Scheduled work joins the conversation instead of disappearing into a separate automation log. Closing the browser does not close the workstation.
 
-The image is an immutable, public Linux AMD64 build with GitHub artifact attestation. Its health, authentication, unprivileged runtime, restart behavior, and persisted data were smoke-tested at the published digest. See the [release contract](docs/RELEASE.md) for verification and the source-build fallback.
+## What you can do
 
-## Link WhatsApp from `main`
+### Start work from the web or WhatsApp
 
-The current source build includes a built-in WhatsApp linked-device connector. On the Workstation setup screen, choose **Link WhatsApp**, then scan the QR code from WhatsApp → **Linked devices** → **Link a device**. Send any text to your own WhatsApp chat; it enters the same conversation and queue as browser messages, and Orkestr sends the result back to that chat. Browser and scheduled replies are mirrored there too. The linked-device session is stored privately in the `/data` volume and can be removed with **Unlink**.
+Use the web chat, or link WhatsApp as a companion device by scanning a QR code. Messages sent to your own WhatsApp chat enter Orkestr, and results return to that chat. No second phone number or group is required.
 
-The frozen `v0.1.0-build-week` image above predates this connector, so build `main` with `docker compose up --build` to use it.
+### Run work now or later
 
-## Optional Live Desk
+Create one-time, hourly, daily, or weekly timers. Scheduled messages use the same queue as manual requests and can be paused, edited, run immediately, or deleted.
 
-Give Codex a persistent graphical Ubuntu desktop with Chromium, XFCE, a terminal, a file manager, and human takeover:
+### Give Codex a real workstation
+
+The optional **Live Desk** includes Ubuntu, XFCE, Chromium, a terminal, and a file manager. Browser data persists between runs. Watch Codex use the environment, open the desk full-screen, or explicitly take control of the keyboard and mouse.
+
+### Work with the same files and terminal
+
+The browser interface exposes a real PTY terminal and the persistent workspace. Browse, upload, download, attach, and share files without moving work into a second tool.
+
+### Recover honestly
+
+Conversation history, queued work, schedules, files, Codex state, and browser data live in Docker volumes. If execution is interrupted, Orkestr preserves the evidence and avoids silently replaying uncertain work.
+
+## What is it useful for?
+
+Orkestr Lite is an operational layer, not a workflow-specific bot. For example:
+
+- **Outreach:** research contacts, prepare follow-ups, and bring drafts back for review.
+- **Job search:** review opportunities, prepare application material, and revisit the pipeline on a schedule.
+- **Messaging:** inspect unresolved conversations, prepare replies, and ask for a decision when needed.
+- **Recurring checks:** inspect a site, repository, queue, or report hourly, daily, or weekly and explain what changed.
+- **Browser work:** keep an authenticated browser profile available when an API is not enough.
+
+These are examples, not built-in LinkedIn or job-board integrations. External services remain subject to their own authentication, policies, and approval requirements.
+
+## Product surface
+
+| Surface | What it does |
+| --- | --- |
+| **Chat** | Send instructions and follow one continuous Codex conversation. |
+| **Desk** | Watch the Ubuntu desktop, use Chromium, or take control. |
+| **Files** | Inspect, upload, download, attach, and share workspace files. |
+| **Terminal** | Work directly inside the same environment through a real PTY. |
+| **Timers** | Schedule one-time, hourly, daily, or weekly messages. |
+| **Settings** | Connect Codex and WhatsApp and manage the workstation. |
+
+Diagnostics and raw Codex events remain available when needed, but they are not the product experience.
+
+## Quickstart
+
+### Requirements
+
+- Linux AMD64, or Docker Desktop with Linux containers
+- Docker Engine with Docker Compose v2
+- an OpenAI account with Codex access
+- 4 GB RAM for headless operation
+- 8 GB RAM recommended for Live Desk
+
+### Start the complete workstation
 
 ```bash
+git clone https://github.com/otcan/orkestr-lite.git
+cd orkestr-lite
 docker compose --profile desk up --build
 ```
 
-Open **Desk** in the navigation to watch Codex's workstation, open the persistent browser, enter full screen, or take exclusive keyboard and mouse control. The regular headless installation remains:
+Open <http://localhost:3000>.
+
+On first boot, Orkestr generates an administrator password and prints it once in the local container logs:
+
+```bash
+docker compose logs orkestr
+```
+
+Then:
+
+1. Sign in to Orkestr.
+2. Connect Codex with ChatGPT device authentication or an API key.
+3. Optionally link WhatsApp by scanning the QR code.
+4. Open **Chat** and send the first request.
+5. Open **Desk** to watch the workstation or take control.
+
+### Headless mode
+
+If you do not need the graphical desktop:
 
 ```bash
 docker compose up --build
 ```
 
-Only port 3000 is published. The VNC stream and Desk agent remain on the private Compose network and are proxied through the authenticated Orkestr API. Desk, browser, Codex, and workspace data persist in separate named volumes. The Desk is an isolated desktop container—not a virtual machine or a hard multi-tenant security boundary.
+Chat, WhatsApp, timers, files, terminal, persistence, and the Codex workspace remain available.
 
-## See the complete loop
+## Try one complete loop
 
-The seeded workspace starts with one intentionally failing test. Send:
+Start manually in Chat:
 
-> Find the failing test in this workspace, implement the smallest correct fix, run the tests, and explain the change. Do not modify dependencies or files unrelated to the failure.
+> Inspect the workspace, explain its current state, and tell me what needs attention first.
 
-Then watch Orkestr Lite preserve the queue transition, selected and effective model, Codex activity, workspace diff, test output, and final response. Verify the result independently:
+Then create a timer:
 
-```bash
-docker compose exec orkestr git -C /workspace diff
-docker compose exec orkestr node --test /workspace/test/clamp.test.js
-```
+> Every Monday at 09:00, review the workspace and summarize anything that requires action.
 
-![A completed Orkestr Lite mission showing model provenance, activity, a workspace diff, and three passing tests](assets/submission/live-mission-complete.png)
+Or send this to your own linked WhatsApp chat:
 
-_Sanitized capture from the live authenticated GPT-5.6 acceptance mission. No account or credential data is shown._
+> Review the open work and send me the three most important next actions.
 
-The exact bounded walkthrough and sub-three-minute narration are in the [judge and demo runbook](docs/DEMO.md).
+All three inputs enter the same conversation. Open **Desk** while Codex is working to see the environment it is using, then inspect the resulting files and terminal output directly.
 
-## Why this is more than a chat wrapper
+## How it works
 
-| Agent-work problem                                           | Orkestr Lite's answer                                                                    |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| A prompt is not an operational record                        | Missions have persisted status, thread, turn, events, result, and workspace diff         |
-| Concurrent agents can collide in one repository              | One active mission serializes workspace mutation; later work remains queued              |
-| Approval requests can disappear during reconnects            | Events replay from a durable cursor before the browser attaches to the live stream       |
-| A process can die after changing files but before responding | In-flight work becomes explicitly interrupted; uncertain work is never silently replayed |
-| Requested and actual models can differ                       | Every mission records requested, effective, and rerouted model identifiers               |
-| Browser access expands the trust boundary                    | Codex credentials and app-server stay behind the API in a hardened local container       |
-
-The intentionally narrow contract—one user, one container, one workspace, one active mission—makes the safety and recovery semantics concrete enough to test rather than merely describe.
-
-## Architecture
+Orkestr Lite is a modular monolith with an optional desktop runtime:
 
 ```mermaid
-flowchart LR
-    Browser[Angular mission UI]
-
-    subgraph Control[Orkestr control container]
-        API[NestJS control plane]
-        DB[(SQLite WAL<br/>missions + events)]
-    end
-
-    subgraph Desk[Optional Ubuntu Live Desk]
-        Codex[Codex app-server]
-        Desktop[XFCE + Chromium + terminal]
-    end
-
-    Workspace[(Mounted Git workspace)]
-
-    Browser -->|session API + replayable SSE| API
-    API -->|state transitions| DB
-    API -->|private authenticated JSONL bridge| Codex
-    API -->|authenticated VNC proxy| Desktop
-    Codex -->|bounded workspace writes| Workspace
-    API -->|diff inspection| Workspace
+flowchart TB
+    Inputs["Web, WhatsApp, timers"] --> API["Authenticated control plane"]
+    API --> Store[("SQLite WAL")]
+    API --> Codex["Codex app-server"]
+    Codex --> Workspace["Persistent workspace"]
+    API --> PTY["PTY terminal"]
+    API --> Desk["XFCE, Chromium, noVNC"]
 ```
 
-NestJS owns mission ordering, recovery policy, sessions, and the Codex process boundary. Angular renders mission state instead of inventing it. SQLite in WAL mode stores the durable mission/event log. A typed client speaks the pinned Codex app-server protocol over standard input/output.
+NestJS owns authentication, queueing, schedules, persistence, recovery, and the Codex process boundary. Angular provides the browser experience. Codex app-server runs the conversation and streams structured activity. SQLite stores operational state without an external database, and `whatsapp-web.js` provides the linked-device self-chat bridge.
 
-Read [Architecture](docs/ARCHITECTURE.md) for the state machine, recovery semantics, trust boundaries, model provenance, and test strategy.
+Only port `3000` is published. Codex app-server, the Desk agent, and VNC are not exposed directly.
 
-## Codex and GPT-5.6 evidence
+## Built for OpenAI Build Week
 
-Codex was the primary implementation environment for the repository: it accelerated the empty baseline into the app-server client, mission controller, Angular product, security boundaries, deterministic fixture, browser acceptance, Docker gate, and submission package. The entrant kept the high-impact decisions explicit, including the modular monolith, serialized workspace writes, backend-owned Codex process, and inspect-before-continue recovery.
+Orkestr Lite was built with Codex as the primary implementation environment and is submitted to the **Work & Productivity** track.
 
-GPT-5.6 is also part of the running product. Orkestr Lite discovers available models through Codex app-server, selects an eligible GPT-5.6 model, and persists both the requested and effective identifiers. The live acceptance mission used `gpt-5.6-sol`, fixed the bounded demo bug, and independently finished with all three tests passing.
+Codex accelerated the app-server integration, persistent conversation controller, WhatsApp router, scheduler, terminal, file handling, Live Desk, Docker packaging, security boundaries, and automated verification. The product itself runs through Codex app-server, discovers the models available to the authenticated account, and records both the requested and effective model.
 
-- Primary Codex implementation `/feedback` session: `019f745b-ee85-7533-b151-e25c7baff729`
-- Live acceptance mission: `8f23b759-7741-4c19-a1c8-b7936de567e3`
-- Requested/effective live model: `gpt-5.6-sol` / `gpt-5.6-sol`
-- Full sanitized provenance: [Build Week evidence](docs/competition/BUILD_WEEK.md)
+The product decisions remained human-owned: one user, one conversation, serialized execution, explicit recovery, an optional graphical desk, and WhatsApp self-chat instead of a second phone number.
 
-The protocol-faithful fake Codex process is deterministic regression infrastructure. It is not presented as live GPT-5.6 evidence.
-
-## Proof, not promises
-
-| Gate                       | What it proves                                                                                                                |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `npm run test`             | SQLite WAL behavior and typed Codex-client lifecycle                                                                          |
-| `npm run test:integration` | Mission execution, crash recovery, full event replay, model provenance, and security boundaries                               |
-| `npm run test:browser`     | Compiled product flow in real Chromium: login, setup, mission, live activity, deep-link reload, result, logout                |
-| `npm run audit`            | Production and development dependency audits                                                                                  |
-| `npm run test:docker`      | Health, authentication, restart, persistence, filesystem modes, unprivileged user, zero capabilities, and `no-new-privileges` |
-| `npm run check:release`    | Formatting, production builds, type checks, all application tests, browser acceptance, audits, and Compose validation         |
-
-GitHub Actions runs the release gate and a clean isolated Docker smoke test on every pull request to `main`.
-
-## Repository map
-
-```text
-apps/
-  server/              NestJS API, authentication, missions, persistence, Codex lifecycle
-  web/                 Angular mission and setup experience
-packages/
-  codex-client/        Typed JSONL client for the Codex app-server protocol
-  shared/              Cross-workspace mission and event contracts
-demo/
-  workspace/           Deterministic failing-test workspace for the judge path
-  *.mjs                Reset and live acceptance automation
-test/
-  e2e/                 Real-browser product walkthrough
-  integration/         Mission, recovery, replay, provenance, and security coverage
-  smoke/               Isolated production-container verification
-docs/
-  ARCHITECTURE.md       State machine, trust boundaries, decisions, and test layers
-  DEMO.md               Exact judge path and sub-three-minute demo
-  RELEASE.md            Immutable source/image release contract
-  competition/          Provenance, submission copy, media, and final checklist
-assets/submission/      Authentic product captures and disclosed campaign artwork
-```
-
-The source remains a small npm-workspace monorepo. Product code is separated by runtime boundary; competition operations are separated from product documentation.
-
-## Develop from source
-
-Requirements: Node.js 22, npm 10, Git, Docker for the container gate, and Codex CLI `0.144.5` for a live run.
+<details>
+<summary><strong>Verification commands</strong></summary>
 
 ```bash
 npm ci
@@ -181,33 +182,24 @@ npm run check:release
 npm run test:docker
 ```
 
-For local development:
+The automated suite covers the product walkthrough, Codex protocol lifecycle, persistence and recovery, timers, WhatsApp routing, workspace boundaries, authentication, production builds, and clean Docker restart.
 
-```bash
-npm run dev:server
-npm run dev:web
-```
+</details>
 
-Reset the disposable seeded workspace with `node demo/reset-demo.mjs`. Do not use its destructive reset behavior against a real project.
+## Security and current scope
 
-## Scope and safety
+Orkestr Lite is a powerful local application. Access to it is equivalent to shell access to its workspace.
 
-The source build is single-user and loopback-only by default. It includes one persistent Codex conversation, browser and WhatsApp attachments, a whole-container file browser with uploads, a real PTY terminal, WhatsApp self-chat routing, one-time/hourly/daily/weekly timers, and the optional Live Desk. It requires the user's own eligible Codex authentication and is not a hosted multi-tenant service. Hosted-judge isolation and a new published release image remain separate release work.
+- Port `3000` binds to loopback by default.
+- The application runs unprivileged with Linux capabilities dropped and `no-new-privileges` enabled.
+- Codex credentials and WhatsApp session state stay in private persistent volumes.
+- The Docker socket is never mounted.
+- The source build is single-user and intended for private, self-hosted deployment.
+- Live Desk is an isolated desktop container, not a virtual machine or hard multi-tenant boundary.
 
-Treat access to Orkestr Lite as equivalent to shell access to its mounted workspace. Never expose port 3000 directly to the public internet; read [Security](SECURITY.md) before changing the deployment boundary.
+Do not expose Orkestr directly to the public internet. Read [Security](SECURITY.md) before changing the deployment boundary.
 
-## Documentation
-
-- [Documentation index](docs/README.md)
-- [Architecture and engineering decisions](docs/ARCHITECTURE.md)
-- [Judge and demo runbook](docs/DEMO.md)
-- [Release contract](docs/RELEASE.md)
-- [Build Week provenance](docs/competition/BUILD_WEEK.md)
-- [Submission checklist](docs/competition/CHECKLIST.md)
-- [Devpost narrative](docs/competition/SUBMISSION.md)
-- [Media package](docs/competition/MEDIA.md)
-
-The immutable `v0.1.0-build-week` tag and published image remain the competition runtime. Documentation on `main` may record later evidence and presentation improvements but does not silently amend that frozen artifact.
+Current limits are intentional: one user, one active Codex conversation, and one workspace per installation; Linux AMD64 is the verified target; timers support once, hourly, daily, and weekly schedules; and WhatsApp uses the user's linked-device session and self-chat. Orkestr does not bypass CAPTCHAs, service policies, or authentication requirements.
 
 ## License
 
