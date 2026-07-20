@@ -64,3 +64,15 @@ OIDC, and attestations required by the release job.
 Before tagging, run the full release gate, one live GPT-5.6 research acceptance,
 `npm run demo:verify`, final clean pulls, setup, demo, restart, and cleanup from a
 signed-out Docker environment. Do not create the tag until every item passes.
+
+The tag also waits for the owner-controlled gate: confirmed Devpost
+registration/eligibility, approved sanitized captures, approved narrated video,
+and a working public video URL. Validate those confirmations with
+`npm run submission:verify -- --owner-gate`.
+
+After publication and final submission, use `npm run submission:record` to
+create the non-secret JSON record described in
+`docs/competition/RELEASE_EVIDENCE.md`, then run
+`npm run submission:verify -- --published`. A source-independent workflow
+failure may be retried. A source correction requires a new immutable patch
+version; never move the v0.2 tag.

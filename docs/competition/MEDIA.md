@@ -23,3 +23,15 @@ or an old mission-centric screenshot in the v0.2 montage.
 The video must disclose visible jump cuts for live research latency, show the
 official source URLs, and keep chronological execution truthful. Re-record any
 take that exposes a credential or private WhatsApp content.
+
+Raw WhatsApp captures and narration belong under ignored `demo/private/` paths.
+`npm run demo:capture` requires the phone capture to be cropped, redacted with
+black rectangles, or explicitly approved as already sanitized. The derived
+`whatsapp.png` still requires human inspection before commit. QR codes, linked
+device codes, phone numbers, names, unrelated messages, and notification chrome
+must not remain readable.
+
+Build the montage with `npm run demo:montage` and the narrated draft with
+`npm run demo:video`. The latter reads `ORKESTR_NARRATION`, adds an authenticity
+and jump-cut disclosure to every scene, normalizes audio, and rejects a duration
+of 179 seconds or longer.

@@ -86,7 +86,8 @@ workspace, and no account email, token, device code, or credential was captured.
 - Effective model: `gpt-5.6-sol`
 - Changed file: `src/clamp.js`
 - Independent verification: `node --test test/clamp.test.js` reported 3 passed, 0 failed
-- Sanitized browser evidence: `assets/submission/live-mission-complete.png`
+- Sanitized browser evidence:
+  `assets/submission/archive/v0.1/live-mission-complete.png`
 
 The mission corrected the reversed minimum and maximum arguments in the clamp
 expression, ran the workspace tests itself, and completed without a model

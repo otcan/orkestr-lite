@@ -249,7 +249,10 @@ weekly watch through the same conversation.
 
 ```bash
 export ORKESTR_LIVE_PASSWORD='your local administrator password'
-export ORKESTR_LIVE_WORKSPACE='/absolute/path/to/the-mounted-workspace'
+export ORKESTR_DEMO_WORKSPACE="$PWD/.demo/workspace"
+export ORKESTR_LIVE_URL=http://127.0.0.1:3001
+npm run demo:prepare
+npm run demo:up
 npm run demo
 npm run demo:verify
 ```
@@ -261,7 +264,7 @@ target workspace contains the disposable-demo sentinel. See
 ## Built for OpenAI Build Week
 
 Orkestr Lite was built with Codex as the primary implementation environment and
-is submitted to the **Work & Productivity** track.
+is submitted in the **Developer Tools** category.
 
 Codex accelerated the app-server integration, persistent conversation
 controller, WhatsApp router, scheduler, terminal, file handling, Live Desk,

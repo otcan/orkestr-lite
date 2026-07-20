@@ -3,8 +3,13 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const workspace = resolve(
-  process.argv[2] ?? process.env.ORKESTR_DEMO_WORKSPACE ?? "/workspace",
+  process.argv[2] ?? process.env.ORKESTR_DEMO_WORKSPACE ?? "",
 );
+assert.ok(
+  process.argv[2] || process.env.ORKESTR_DEMO_WORKSPACE,
+  "ORKESTR_DEMO_WORKSPACE is required and must be a host path",
+);
+assert.notEqual(workspace, "/workspace", "Use the bind-mounted host path");
 const markdownPath = join(workspace, "reports/agent-runtime-landscape.md");
 const htmlPath = join(workspace, "reports/agent-runtime-landscape.html");
 const evidencePath = join(workspace, ".orkestr/demo-evidence-v0.2.json");

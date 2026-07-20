@@ -1,26 +1,55 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { execFile } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { isAbsolute, join, resolve } from "node:path";
+import { promisify } from "node:util";
 
-const baseUrl = process.env.ORKESTR_LIVE_URL ?? "http://127.0.0.1:3000";
+const baseUrl = process.env.ORKESTR_LIVE_URL ?? "http://127.0.0.1:3001";
 const password = process.env.ORKESTR_LIVE_PASSWORD;
-const workspace = resolve(
-  process.env.ORKESTR_LIVE_WORKSPACE ??
-    process.env.ORKESTR_DEMO_WORKSPACE ??
-    "",
-);
+const workspace = resolve(process.env.ORKESTR_DEMO_WORKSPACE ?? "");
+let demoWorkspaceValidated = false;
+let sourceSha = process.env.ORKESTR_SOURCE_SHA ?? null;
+process.on("uncaughtExceptionMonitor", (error) => {
+  if (!demoWorkspaceValidated) return;
+  try {
+    writeFileSync(
+      join(workspace, ".orkestr/demo-failure-v0.2.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          failedAt: new Date().toISOString(),
+          baseUrl,
+          sourceSha,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : null,
+        },
+        null,
+        2,
+      )}\n`,
+      { mode: 0o600 },
+    );
+  } catch {}
+});
 const whatsappTimeoutMinutes = Math.max(
   1,
   Number(process.env.ORKESTR_DEMO_WHATSAPP_TIMEOUT_MINUTES) || 20,
 );
 
 if (!password) throw new Error("ORKESTR_LIVE_PASSWORD is required");
-if (
-  !process.env.ORKESTR_LIVE_WORKSPACE &&
-  !process.env.ORKESTR_DEMO_WORKSPACE
-) {
-  throw new Error("ORKESTR_LIVE_WORKSPACE is required");
+if (!process.env.ORKESTR_DEMO_WORKSPACE) {
+  throw new Error("ORKESTR_DEMO_WORKSPACE is required");
 }
+assert.ok(isAbsolute(process.env.ORKESTR_DEMO_WORKSPACE));
+assert.notEqual(workspace, "/workspace", "Use the bind-mounted host path");
+assert.equal(
+  (await readFile(join(workspace, ".orkestr-demo-disposable"), "utf8")).trim(),
+  "orkestr-lite-demo-v0.2",
+  "Disposable demo sentinel is missing or invalid",
+);
+demoWorkspaceValidated = true;
+const execFileAsync = promisify(execFile);
+sourceSha ??= (await execFileAsync("git", ["rev-parse", "HEAD"])).stdout.trim();
 
 const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
   method: "POST",
@@ -127,7 +156,7 @@ await mkdir(join(workspace, ".orkestr"), { recursive: true });
 const evidence = {
   schemaVersion: 1,
   completedAt: new Date().toISOString(),
-  sourceSha: process.env.ORKESTR_SOURCE_SHA ?? null,
+  sourceSha,
   primaryPrompt: researchPrompt(),
   research: evidenceTurn(completedResearch),
   whatsapp: {

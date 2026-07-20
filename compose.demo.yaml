@@ -1,0 +1,16 @@
+name: orkestr-v02-demo
+
+# Disposable acceptance stack only. The host workspace is deliberately bind
+# mounted so the runner and the containers inspect the exact same artifacts.
+services:
+  orkestr:
+    ports: !override
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - "${ORKESTR_DEMO_WORKSPACE:?set ORKESTR_DEMO_WORKSPACE to an absolute disposable host directory}:/workspace"
+    environment:
+      ORKESTR_ADMIN_PASSWORD: "${ORKESTR_LIVE_PASSWORD:?set ORKESTR_LIVE_PASSWORD for the disposable demo}"
+
+  orkestr-desk:
+    volumes:
+      - "${ORKESTR_DEMO_WORKSPACE:?set ORKESTR_DEMO_WORKSPACE to an absolute disposable host directory}:/workspace"

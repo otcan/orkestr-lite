@@ -2,8 +2,14 @@ import { access, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const workspace = resolve(
-  process.argv[2] ?? process.env.ORKESTR_DEMO_WORKSPACE ?? "/workspace",
+  process.argv[2] ?? process.env.ORKESTR_DEMO_WORKSPACE ?? "",
 );
+if (!process.argv[2] && !process.env.ORKESTR_DEMO_WORKSPACE) {
+  throw new Error("ORKESTR_DEMO_WORKSPACE is required and must be a host path");
+}
+if (workspace === "/workspace" || workspace === "/") {
+  throw new Error(`Refusing to reset unsafe workspace ${workspace}`);
+}
 const sentinel = join(workspace, ".orkestr-demo-disposable");
 const expected = "orkestr-lite-demo-v0.2";
 
@@ -21,6 +27,7 @@ for (const target of [
   join(workspace, "reports/agent-runtime-landscape.md"),
   join(workspace, "reports/agent-runtime-landscape.html"),
   join(workspace, ".orkestr/demo-evidence-v0.2.json"),
+  join(workspace, ".orkestr/demo-failure-v0.2.json"),
 ]) {
   await rm(target, { force: true });
 }

@@ -7,27 +7,35 @@ regression test, not the public story.
 
 ## Preflight
 
-Use a disposable workspace. Create the reset sentinel only there:
+Use the dedicated Compose project and a host bind that exists only for this
+acceptance run. The preparation command refuses broad or non-demo paths and
+creates the reset sentinel itself:
 
 ```bash
-printf 'orkestr-lite-demo-v0.2\n' > /workspace/.orkestr-demo-disposable
 npm ci
 npm run check:release
 npm run test:docker
-docker compose --profile desk up -d
+export ORKESTR_DEMO_WORKSPACE="$PWD/.demo/workspace"
+export ORKESTR_LIVE_URL=http://127.0.0.1:3001
+read -rsp 'Disposable Orkestr password: ' ORKESTR_LIVE_PASSWORD
+export ORKESTR_LIVE_PASSWORD
+npm run demo:prepare
+npm run demo:up
 ```
 
-Open <http://localhost:3000>, complete Workstation setup, verify GPT-5.6 in the
+`compose.demo.yaml` fixes the project name to `orkestr-v02-demo`, binds only
+loopback port 3001, creates project-scoped data/auth/Desk volumes, and mounts
+that absolute host directory at `/workspace` in both containers. Host-side
+scripts always use `ORKESTR_DEMO_WORKSPACE`; Codex always sees `/workspace`.
+
+Open <http://localhost:3001>, complete Workstation setup, verify GPT-5.6 in the
 chat toolbar, link WhatsApp, and confirm Desk/Files/Terminal. Do not capture a
 password, device code, account email, WhatsApp QR, phone number, personal inbox,
 or Codex credential.
 
-Set the demo runner variables without committing them:
+Then run the live workflow:
 
 ```bash
-read -rsp 'Local Orkestr password: ' ORKESTR_LIVE_PASSWORD
-export ORKESTR_LIVE_PASSWORD
-export ORKESTR_LIVE_WORKSPACE=/workspace
 npm run demo:reset
 npm run demo
 ```
@@ -39,6 +47,11 @@ provenance in `/workspace/.orkestr/demo-evidence-v0.2.json`. Finish with:
 ```bash
 npm run demo:verify
 ```
+
+On failure, keep the terminal output and application activity. Do not edit the
+evidence JSON. Diagnose the failure, run `demo:reset` only against the sentinel
+workspace, and rerun the complete research/WhatsApp/timer sequence affected by
+the failure.
 
 ## Exact primary prompt
 
@@ -76,6 +89,37 @@ completed sourced recommendation, and the returned Markdown document.
 Use visible jump cuts for research latency. Never imply that a cut was
 uninterrupted real time and never substitute fake Codex output. A final montage
 may use only sanitized captures from this run.
+
+## Capture and video assembly
+
+Place the private phone source under `demo/private/` or another ignored path.
+It must contain only the demo self-chat. Supply either a crop, black redaction
+rectangles, or an already-sanitized owner approval:
+
+```bash
+export ORKESTR_WHATSAPP_CAPTURE="$PWD/demo/private/whatsapp-source.png"
+export ORKESTR_WHATSAPP_CROP='1170:1800:120:80'       # w:h:x:y, example only
+export ORKESTR_WHATSAPP_REDACTIONS='0:0:1170:160'     # x:y:w:h, comma-separated
+npm run demo:capture
+npm run demo:montage
+```
+
+Visually inspect all seven images and `hero-montage.png`. Never use the crop
+example without checking the actual phone capture. To assemble the narrated
+draft, keep the owner's WAV/M4A/MP3 outside Git and run:
+
+```bash
+export ORKESTR_NARRATION="$PWD/demo/private/narration.m4a"
+npm run demo:video
+npm run submission:verify
+```
+
+The video builder adds truthful capture/jump-cut captions, normalizes narration,
+and rejects audio at or above 179 seconds. See
+`docs/competition/NARRATION.md` for the timed English script.
+
+Stop the disposable stack with `npm run demo:down`. Do not remove its volumes or
+private inputs until all evidence has been reviewed and backed up.
 
 ## Acceptance criteria
 
