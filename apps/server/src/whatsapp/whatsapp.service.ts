@@ -480,6 +480,13 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     if (this.isOutboundMessage(messageId)) return;
     if (!this.claimInboundMessage(messageId, text || "Attachment")) return;
     this.lastMessageAt = new Date().toISOString();
+    const command = !message.hasMedia ? parseWhatsAppCommand(text) : null;
+    if (command) {
+      this.linkMessage(messageId, null, "control");
+      await this.handleControlCommand(command, messageId);
+      this.publishStatus();
+      return;
+    }
     try {
       const attachment = message.hasMedia
         ? await this.saveIncomingMedia(messageId, message)
@@ -495,6 +502,126 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       );
       void this.flushOutbox();
     }
+  }
+
+  private async handleControlCommand(
+    command: WhatsAppControlCommand,
+    messageId: string,
+  ): Promise<void> {
+    if (command.action === "help") {
+      this.enqueueText(whatsAppHelpText(), null, "system");
+      void this.flushOutbox();
+      return;
+    }
+    if (command.action === "status" && !command.code) {
+      const turns = this.missions.list();
+      const active = turns.find((turn) =>
+        ["starting", "running", "awaiting_approval"].includes(turn.status),
+      );
+      const queued = turns
+        .filter((turn) => turn.status === "queued")
+        .sort(
+          (left, right) =>
+            (left.enqueueSequence ?? 0) - (right.enqueueSequence ?? 0),
+        );
+      const lines = [
+        active ? `Active: ${this.describeTurn(active)}` : "Active: none",
+        `Queue depth: ${queued.length}`,
+      ];
+      if (queued.length) {
+        lines.push(
+          "Queued:",
+          ...queued
+            .slice(0, 5)
+            .map((turn, index) => `${index + 1}. ${this.describeTurn(turn)}`),
+        );
+      }
+      this.enqueueText(lines.join("\n"), active?.id ?? null, "system");
+      void this.flushOutbox();
+      return;
+    }
+
+    const mission = command.code
+      ? this.missions.findByControlCode(command.code)
+      : null;
+    if (!mission) {
+      this.enqueueText(
+        `Unknown control code ${command.code}. Send help for command syntax.`,
+        null,
+        "system",
+      );
+      void this.flushOutbox();
+      return;
+    }
+
+    const code = this.missions.controlCode(mission.id);
+    try {
+      if (command.action === "status") {
+        this.missions.appendAuditEvent(mission.id, "whatsapp.control", {
+          action: "status",
+          code,
+          messageId,
+          outcome: "reported",
+        });
+        this.enqueueText(this.describeTurn(mission), mission.id, "system");
+      } else if (command.action === "stop") {
+        const stopped = await this.missions.interrupt(mission.id);
+        this.missions.appendAuditEvent(mission.id, "whatsapp.control", {
+          action: "stop",
+          code,
+          messageId,
+          outcome: stopped.status,
+        });
+        this.enqueueText(
+          `${code} · ${statusLabel(stopped.status)}`,
+          mission.id,
+          "system",
+        );
+      } else {
+        const approval = this.missions.latestPendingApproval(mission.id);
+        if (!approval) {
+          throw new Error(`${code} has no pending approval request`);
+        }
+        const decision = command.action === "approve" ? "accept" : "decline";
+        const updated = this.missions.approve(mission.id, {
+          requestId: approval.requestId,
+          decision,
+        });
+        this.missions.appendAuditEvent(mission.id, "whatsapp.control", {
+          action: command.action,
+          code,
+          messageId,
+          requestId: approval.requestId,
+          outcome: "resolved",
+        });
+        this.enqueueText(
+          `${code} · Approval ${command.action === "approve" ? "accepted" : "declined"}. ${statusLabel(updated.status)}.`,
+          mission.id,
+          "system",
+        );
+      }
+    } catch (error) {
+      this.missions.appendAuditEvent(mission.id, "whatsapp.control", {
+        action: command.action,
+        code,
+        messageId,
+        outcome: "rejected",
+        error: errorMessage(error),
+      });
+      this.enqueueText(
+        `${code} · ${errorMessage(error)}`,
+        mission.id,
+        "system",
+      );
+    }
+    void this.flushOutbox();
+  }
+
+  private describeTurn(mission: MissionRecord): string {
+    const code = this.missions.controlCode(mission.id);
+    const position = this.missions.queuePosition(mission.id);
+    const positionText = position ? ` · queue ${position}` : "";
+    return `${code} · ${statusLabel(mission.status)}${positionText} · ${truncate(mission.title, 100)}`;
   }
 
   private claimCallback(messageId: string): boolean {
@@ -639,8 +766,9 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     if (event.kind === "approval.required") {
       const mission = this.missions.get(event.missionId);
       if (this.enabled()) {
+        const code = this.missions.controlCode(mission.id);
         this.enqueueText(
-          `Approval needed for ${sourceLabel(mission.source)} work. Open Orkestr Lite to review it.`,
+          `Approval needed · ${code}\nReply approve ${code} or decline ${code}. You can also review it in Orkestr Lite.`,
           mission.id,
           mission.source,
           -50,
@@ -675,15 +803,17 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
           : mission.status === "cancelled"
             ? "Cancelled"
             : "Failed";
+    const code = this.missions.controlCode(mission.id);
     const detail =
       mission.finalResponse ||
       mission.error ||
       mission.latestProgressSummary ||
       "No result text was returned.";
+    const codeLine = mission.status === "completed" ? "" : ` · ${code}`;
     const message =
       mission.source === "whatsapp"
-        ? `Orkestr · ${heading}\n\n${detail}`
-        : `Orkestr · ${sourceLabel(mission.source)} · ${heading}\n\nYou: ${truncate(mission.prompt, 900)}\n\nCodex: ${detail}`;
+        ? `Orkestr · ${heading}${codeLine}\n\n${detail}`
+        : `Orkestr · ${sourceLabel(mission.source)} · ${heading}${codeLine}\n\nYou: ${truncate(mission.prompt, 900)}\n\nCodex: ${detail}`;
     splitWhatsAppText(message).forEach((chunk, index) => {
       this.enqueueText(chunk, mission.id, mission.source, index);
     });
@@ -1041,11 +1171,12 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
             )
             .run(mission.id, now, batch.id);
         })();
+        const code = this.missions.controlCode(mission.id);
         this.enqueueText(
           mission.status === "queued" &&
             this.missions.queuePosition(mission.id)! > 1
-            ? `Queued · Position ${this.missions.queuePosition(mission.id)}`
-            : "Working · Your message is now with Codex",
+            ? `Queued · ${code} · Position ${this.missions.queuePosition(mission.id)}\nReply status ${code} or stop ${code}.`
+            : `Working · ${code} · Your message is now with Codex\nReply status ${code} or stop ${code}.`,
           mission.id,
           "whatsapp",
           -100,
@@ -1083,7 +1214,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     text: string,
     missionId: string | null,
     source: string | null,
-    ordinal = 0,
+    ordinal?: number,
   ): void {
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -1093,8 +1224,26 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
           id, turn_id, ordinal, kind, body, status, next_attempt_at, created_at, updated_at
         ) VALUES (?, ?, ?, 'text', ?, 'pending', ?, ?, ?)`,
       )
-      .run(id, missionId, ordinal, text, now, now, now);
+      .run(
+        id,
+        missionId,
+        ordinal ?? this.nextOutboxOrdinal(missionId),
+        text,
+        now,
+        now,
+        now,
+      );
     this.publishStatus();
+  }
+
+  private nextOutboxOrdinal(missionId: string | null): number {
+    if (!missionId) return 0;
+    const row = this.database.db
+      .prepare(
+        "SELECT COALESCE(MAX(ordinal), -1) + 1 AS ordinal FROM whatsapp_outbox WHERE turn_id = ?",
+      )
+      .get(missionId) as { ordinal: number };
+    return row.ordinal;
   }
 
   private enqueueMedia(
@@ -1621,6 +1770,56 @@ function sourceLabel(source: MissionRecord["source"]): string {
   if (source === "whatsapp") return "WhatsApp";
   if (source === "demo") return "Demo";
   return "Browser";
+}
+
+export type WhatsAppControlCommand =
+  | { action: "help" }
+  | { action: "status"; code: string | null }
+  | { action: "stop" | "approve" | "decline"; code: string };
+
+export function parseWhatsAppCommand(
+  value: string,
+): WhatsAppControlCommand | null {
+  const text = value.trim();
+  if (/^help$/i.test(text)) return { action: "help" };
+  if (/^status$/i.test(text)) return { action: "status", code: null };
+  const match = /^(status|stop|approve|decline)\s+([A-Z0-9]{8})$/i.exec(text);
+  if (!match) return null;
+  const action = match[1]!.toLowerCase() as
+    | "status"
+    | "stop"
+    | "approve"
+    | "decline";
+  const code = match[2]!.toUpperCase();
+  return action === "status" ? { action, code } : { action, code };
+}
+
+export function whatsAppHelpText(): string {
+  return [
+    "Orkestr WhatsApp controls",
+    "status — active work and queue",
+    "status CODE — durable turn status",
+    "stop CODE — cancel queued or stop active work",
+    "approve CODE — accept the latest pending approval",
+    "decline CODE — decline the latest pending approval",
+    "help — show these commands",
+    "",
+    "Commands must be the whole message. Other text goes to Codex.",
+  ].join("\n");
+}
+
+function statusLabel(status: MissionRecord["status"]): string {
+  const labels: Record<MissionRecord["status"], string> = {
+    queued: "Queued",
+    starting: "Starting",
+    running: "Working",
+    awaiting_approval: "Approval needed",
+    completed: "Completed",
+    failed: "Failed",
+    interrupted: "Stopped",
+    cancelled: "Cancelled",
+  };
+  return labels[status];
 }
 
 function truncate(value: string, limit: number): string {

@@ -1,148 +1,199 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
 const baseUrl = process.env.ORKESTR_LIVE_URL ?? "http://127.0.0.1:3000";
 const password = process.env.ORKESTR_LIVE_PASSWORD;
-const workspace = process.env.ORKESTR_LIVE_WORKSPACE;
+const workspace = resolve(
+  process.env.ORKESTR_LIVE_WORKSPACE ??
+    process.env.ORKESTR_DEMO_WORKSPACE ??
+    "",
+);
+const whatsappTimeoutMinutes = Math.max(
+  1,
+  Number(process.env.ORKESTR_DEMO_WHATSAPP_TIMEOUT_MINUTES) || 20,
+);
 
 if (!password) throw new Error("ORKESTR_LIVE_PASSWORD is required");
-if (!workspace) throw new Error("ORKESTR_LIVE_WORKSPACE is required");
+if (
+  !process.env.ORKESTR_LIVE_WORKSPACE &&
+  !process.env.ORKESTR_DEMO_WORKSPACE
+) {
+  throw new Error("ORKESTR_LIVE_WORKSPACE is required");
+}
 
 const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ password }),
 });
-if (loginResponse.status !== 200) {
+if (!loginResponse.ok) {
   throw new Error(
     `Login failed (${loginResponse.status}): ${await loginResponse.text()}`,
   );
 }
 const cookie = loginResponse.headers.getSetCookie()[0]?.split(";", 1)[0];
-assert.ok(cookie, "Login response did not set a session cookie");
+assert.ok(cookie, "Login did not set a session cookie");
 const login = await loginResponse.json();
 assert.equal(typeof login.csrfToken, "string");
 
 const setup = await waitForSetup();
-process.stdout.write(
-  `${JSON.stringify(
-    {
-      event: "setup.ready",
-      process: setup.codex.process,
-      cliVersion: setup.codex.cliVersion,
-      expectedVersion: setup.codex.expectedVersion,
-      authenticated: setup.codex.authenticated,
-      authMode: setup.codex.authMode,
-      requestedModel: setup.codex.requestedModel,
-      selectedModel: setup.codex.selectedModel,
-      modelReady: setup.codex.modelReady,
-      availableModelCount: setup.codex.models.length,
-    },
-    null,
-    2,
-  )}\n`,
-);
 assert.equal(setup.codex.authenticated, true);
-assert.equal(setup.codex.modelReady, true);
 assert.match(setup.codex.selectedModel, /^gpt-5\.6(?:$|[-.])/i);
+emit("setup.ready", {
+  selectedModel: setup.codex.selectedModel,
+  cliVersion: setup.codex.cliVersion,
+  whatsappReady: setup.whatsapp?.ready ?? false,
+});
 
-const created = await request("/api/missions", {
+const research = await request("/api/turns", {
   method: "POST",
   csrfToken: login.csrfToken,
   body: {
     source: "demo",
-    title: "Build Week live GPT-5.6 acceptance",
-    prompt:
-      "Work only in this disposable demo workspace. Find the failing test, identify the cause, implement the smallest correct fix, run the tests, and explain the change. Do not access the network or anything outside this workspace.",
+    content: researchPrompt(),
+    clientMessageId: `v0.2-research-${Date.now()}`,
   },
 });
-process.stdout.write(
-  `${JSON.stringify({ event: "mission.created", id: created.id })}\n`,
-);
+emit("research.queued", {
+  turnId: research.id,
+  controlCode: research.controlCode,
+});
+const completedResearch = await waitForTurn(research.id, 45 * 60_000);
+assertGpt56(completedResearch);
 
-let mission;
-let priorStatus;
-for (let attempt = 0; attempt < 600; attempt += 1) {
-  mission = await request(`/api/missions/${created.id}`);
-  if (mission.status !== priorStatus) {
-    process.stdout.write(
-      `${JSON.stringify({ event: "mission.status", status: mission.status })}\n`,
-    );
-    priorStatus = mission.status;
-  }
-  if (
-    ["completed", "failed", "interrupted", "cancelled"].includes(mission.status)
-  ) {
-    break;
-  }
-  if (mission.status === "awaiting_approval") {
-    throw new Error(
-      `Mission ${mission.id} is awaiting manual approval; inspect it in Orkestr Lite`,
-    );
-  }
-  await delay(2_000);
-}
-
-assert.ok(mission, "Mission did not start");
-assert.equal(mission.status, "completed", mission.error ?? "Mission timed out");
-assert.match(mission.requestedModel, /^gpt-5\.6(?:$|[-.])/i);
-assert.match(mission.effectiveModel, /^gpt-5\.6(?:$|[-.])/i);
-
-const resolvedWorkspace = resolve(workspace);
-const changedSource = await readFile(
-  join(resolvedWorkspace, "src/clamp.js"),
-  "utf8",
-);
-assert.match(changedSource, /Math\.max\(minimum/);
-
-const testEnvironment = { ...process.env };
-delete testEnvironment.NODE_TEST_CONTEXT;
-const testResult = await execFileAsync(
-  process.execPath,
-  ["--test", "test/clamp.test.js"],
-  { cwd: resolvedWorkspace, env: testEnvironment },
-);
-assert.match(testResult.stdout, /pass 3/);
+const markdownPath = join(workspace, "reports/agent-runtime-landscape.md");
+const htmlPath = join(workspace, "reports/agent-runtime-landscape.html");
+emit("research.completed", {
+  turnId: completedResearch.id,
+  effectiveModel: completedResearch.effectiveModel,
+  markdownPath,
+  htmlPath,
+});
 
 process.stdout.write(
-  `${JSON.stringify(
-    {
-      event: "acceptance.passed",
-      missionId: mission.id,
-      codexThreadId: mission.codexThreadId,
-      codexTurnId: mission.codexTurnId,
-      requestedModel: mission.requestedModel,
-      effectiveModel: mission.effectiveModel,
-      startedAt: mission.startedAt,
-      finishedAt: mission.finishedAt,
-      changedFile: "src/clamp.js",
-      independentTest: testResult.stdout.trim().split("\n").slice(-6),
-      finalResponse: mission.finalResponse,
-    },
-    null,
-    2,
-  )}\n`,
+  "\nWhatsApp step (authentic linked-device self-chat)\n" +
+    "Send this exact message now:\n\n" +
+    `${whatsappFollowup()}\n\n` +
+    `Waiting up to ${whatsappTimeoutMinutes} minutes for the completed WhatsApp turn…\n`,
 );
+const whatsappTurn = await waitForWhatsAppFollowup(
+  Date.parse(research.createdAt),
+  whatsappTimeoutMinutes * 60_000,
+);
+assertGpt56(whatsappTurn);
+assert.ok(
+  whatsappTurn.attachments.some(
+    (attachment) =>
+      attachment.direction === "outbound" &&
+      attachment.name === "agent-runtime-landscape.md",
+  ),
+  "WhatsApp follow-up did not return the updated Markdown report",
+);
+emit("whatsapp.completed", {
+  turnId: whatsappTurn.id,
+  controlCode: whatsappTurn.controlCode,
+  outputAttachment: "agent-runtime-landscape.md",
+});
+
+const now = new Date();
+const timer = await request("/api/timers", {
+  method: "POST",
+  csrfToken: login.csrfToken,
+  body: {
+    name: "Weekly agent runtime watch",
+    prompt:
+      "Review the three official runtime documentation sources in /workspace/reports/agent-runtime-landscape.md for material changes. Update both report files with citations and a dated change note. If nothing material changed, record that explicitly.",
+    kind: "weekly",
+    time: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+    weekday: now.getDay(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    enabled: true,
+  },
+});
+const ranTimer = await request(`/api/timers/${timer.id}/run`, {
+  method: "POST",
+  csrfToken: login.csrfToken,
+});
+assert.ok(ranTimer.lastTurnId, "Run now did not create a scheduled turn");
+const scheduledTurn = await waitForTurn(ranTimer.lastTurnId, 30 * 60_000);
+assertGpt56(scheduledTurn);
+emit("schedule.completed", {
+  timerId: timer.id,
+  turnId: scheduledTurn.id,
+});
+
+await mkdir(join(workspace, ".orkestr"), { recursive: true });
+const evidence = {
+  schemaVersion: 1,
+  completedAt: new Date().toISOString(),
+  sourceSha: process.env.ORKESTR_SOURCE_SHA ?? null,
+  primaryPrompt: researchPrompt(),
+  research: evidenceTurn(completedResearch),
+  whatsapp: {
+    ...evidenceTurn(whatsappTurn),
+    outputAttachment: "agent-runtime-landscape.md",
+  },
+  schedule: {
+    id: timer.id,
+    name: timer.name,
+    turn: evidenceTurn(scheduledTurn),
+  },
+  reports: { markdownPath, htmlPath },
+};
+await writeFile(
+  join(workspace, ".orkestr/demo-evidence-v0.2.json"),
+  `${JSON.stringify(evidence, null, 2)}\n`,
+  { mode: 0o600 },
+);
+emit("demo.passed", evidence);
 
 async function waitForSetup() {
   let latest;
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
     latest = await request("/api/setup/status");
     if (latest.firstMissionReady) return latest;
     await delay(1_000);
   }
   throw new Error(
-    `Orkestr Lite did not become mission-ready: ${JSON.stringify({
-      process: latest?.codex?.process,
-      authenticated: latest?.codex?.authenticated,
-      modelReady: latest?.codex?.modelReady,
-      processError: latest?.codex?.processError,
-    })}`,
+    `Orkestr did not become ready: ${JSON.stringify(latest?.codex ?? {})}`,
   );
+}
+
+async function waitForTurn(id, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let priorStatus;
+  while (Date.now() < deadline) {
+    const turn = await request(`/api/turns/${id}`);
+    if (turn.status !== priorStatus) {
+      emit("turn.status", { turnId: id, status: turn.status });
+      priorStatus = turn.status;
+    }
+    if (turn.status === "completed") return turn;
+    if (["failed", "interrupted", "cancelled"].includes(turn.status)) {
+      throw new Error(
+        `${id} ended ${turn.status}: ${turn.error || "no detail"}`,
+      );
+    }
+    await delay(2_000);
+  }
+  throw new Error(`Turn ${id} timed out`);
+}
+
+async function waitForWhatsAppFollowup(after, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const page = await request("/api/turns?limit=100");
+    const match = page.data.find(
+      (turn) =>
+        turn.source === "whatsapp" &&
+        Date.parse(turn.createdAt) >= after &&
+        /solo-operator recommendation/i.test(turn.prompt),
+    );
+    if (match) return waitForTurn(match.id, Math.max(1, deadline - Date.now()));
+    await delay(2_000);
+  }
+  throw new Error("Timed out waiting for the WhatsApp demo follow-up");
 }
 
 async function request(path, options = {}) {
@@ -154,9 +205,46 @@ async function request(path, options = {}) {
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
-  const result = await response.json();
-  assert.ok(response.ok, `${response.status}: ${JSON.stringify(result)}`);
+  const text = await response.text();
+  const result = text ? JSON.parse(text) : null;
+  assert.ok(response.ok, `${response.status}: ${text}`);
   return result;
+}
+
+function researchPrompt() {
+  return `Create a sourced research report comparing these three agent runtimes using only their official documentation as primary sources:
+- OpenHands runtime: https://docs.openhands.dev/openhands/usage/architecture/runtime
+- Open Interpreter terminal getting started: https://www.openinterpreter.com/docs/terminal/getting-started
+- goose installation: https://goose-docs.ai/docs/getting-started/installation/
+
+Compare deployment model, runtime boundary, persistence, GUI/computer access, supervision, and operational inputs. Be precise: write “not documented in the reviewed sources” when the reviewed pages do not establish a capability; do not equate that with “unsupported.” Include inline Markdown links near every material claim, a concise comparison table, limitations, and a dated source-review note.
+
+Save the cited Markdown report at /workspace/reports/agent-runtime-landscape.md and a readable self-contained HTML version beside it at /workspace/reports/agent-runtime-landscape.html. Open the HTML file in the visible Desk browser with xdg-open after writing both files. Do not fabricate execution, citations, or product capabilities.`;
+}
+
+function whatsappFollowup() {
+  return "Update the agent runtime landscape report with a sourced solo-operator recommendation. Preserve the distinction between not documented in the reviewed sources and unsupported. Return the updated /workspace/reports/agent-runtime-landscape.md file to this WhatsApp chat.";
+}
+
+function assertGpt56(turn) {
+  assert.equal(turn.status, "completed");
+  assert.match(turn.requestedModel || "", /^gpt-5\.6(?:$|[-.])/i);
+  assert.match(turn.effectiveModel || "", /^gpt-5\.6(?:$|[-.])/i);
+}
+
+function evidenceTurn(turn) {
+  return {
+    id: turn.id,
+    source: turn.source,
+    requestedModel: turn.requestedModel,
+    effectiveModel: turn.effectiveModel,
+    createdAt: turn.createdAt,
+    completedAt: turn.completedAt,
+  };
+}
+
+function emit(event, detail) {
+  process.stdout.write(`${JSON.stringify({ event, ...detail })}\n`);
 }
 
 function delay(milliseconds) {

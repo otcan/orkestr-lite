@@ -29,7 +29,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     bash ca-certificates curl git tini xz-utils build-essential python3 pkg-config \
-    tmux ripgrep jq unzip zip openssh-client less vim nano procps lsof \
+    tmux byobu sudo ripgrep jq unzip zip openssh-client less vim nano procps lsof \
     iproute2 iputils-ping dnsutils netcat-openbsd \
     libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdbus-1-3 \
     libdrm2 libgbm1 libglib2.0-0t64 libgtk-3-0t64 libnspr4 libnss3 \
@@ -97,7 +97,10 @@ COPY --from=build --chown=orkestr:orkestr /app/apps/server/package.json ./apps/s
 COPY --from=build --chown=orkestr:orkestr /app/package.json ./package.json
 COPY --chown=orkestr:orkestr demo/workspace/ /opt/orkestr-demo/
 COPY --chown=orkestr:orkestr docker/entrypoint.sh /usr/local/bin/orkestr-entrypoint
-RUN chmod 0755 /usr/local/bin/orkestr-entrypoint
+COPY docker/orkestr-sudoers /etc/sudoers.d/orkestr
+RUN chmod 0755 /usr/local/bin/orkestr-entrypoint \
+  && chmod 0440 /etc/sudoers.d/orkestr \
+  && visudo --check --file=/etc/sudoers.d/orkestr
 
 USER orkestr
 EXPOSE 3000

@@ -31,10 +31,6 @@ try {
     container,
     "--publish",
     "127.0.0.1::3000",
-    "--cap-drop",
-    "ALL",
-    "--security-opt",
-    "no-new-privileges:true",
     "--env",
     `ORKESTR_ADMIN_PASSWORD=${password}`,
     "--mount",
@@ -60,7 +56,23 @@ try {
     ])
   ).stdout;
   assert.match(processSecurity, /CapEff:\s+0{16}/);
-  assert.match(processSecurity, /NoNewPrivs:\s+1/);
+  assert.match(processSecurity, /NoNewPrivs:\s+0/);
+  assert.equal(
+    (
+      await run("docker", ["exec", container, "sudo", "-n", "id", "-u"])
+    ).stdout.trim(),
+    "0",
+  );
+  await run("docker", ["exec", container, "byobu", "--version"]);
+  await run("docker", [
+    "exec",
+    container,
+    "sudo",
+    "-n",
+    "test",
+    "-w",
+    "/var/lib/dpkg",
+  ]);
   await assertLogin(port);
 
   const firstCommit = (

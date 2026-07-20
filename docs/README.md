@@ -4,8 +4,9 @@ Orkestr Lite keeps product and judge documentation close to the code while separ
 
 ## Product and evaluation
 
-- [Architecture](ARCHITECTURE.md) — runtime boundaries, mission state, recovery, persistence, model provenance, and test layers
-- [Judge and demo runbook](DEMO.md) — exact bounded mission, clean-start path, evidence capture, and sub-three-minute narration
+- [Architecture](ARCHITECTURE.md) — control/Desk boundaries, conversation recovery, schedules, WhatsApp, files, and persistence
+- [Judge and demo runbook](DEMO.md) — exact live research workflow, WhatsApp follow-up, schedule, and evidence verification
+- [One-page judge guide](../JUDGE_GUIDE.md) — immutable start and focused product tour
 - [Release contract](RELEASE.md) — immutable source tag, image digest, provenance, smoke test, and amendment rules
 - [Security](../SECURITY.md) — deployment boundary, credentials, data sensitivity, and reporting
 

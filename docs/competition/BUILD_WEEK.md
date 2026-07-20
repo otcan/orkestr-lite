@@ -112,6 +112,38 @@ implementation session ID `019f745b-ee85-7533-b151-e25c7baff729`.
 
 The tag and container are the immutable competition build. This post-freeze documentation records their evidence only and does not alter the tagged source or image.
 
+## v0.2 operational expansion
+
+The v0.1 artifact above remains frozen. Work after that release expanded the
+same Lite repository into the current two-container local workstation:
+
+- a single visible `/chat` conversation rather than mission/thread navigation;
+- the private Ubuntu Desk with XFCE, Chromium, VNC, tmux, and persistent browser
+  state;
+- an explicitly administrative single-user workstation path with Byobu and
+  passwordless `sudo` inside the isolated containers;
+- whole-container Files plus upload/download/explicit WhatsApp delivery and a
+  real PTY terminal;
+- durable five-second WhatsApp batching, media, outbox acknowledgements, inbox
+  snapshot, reconnect state, and exact self-chat supervision commands;
+- interval/hourly/daily/weekly/cron schedules with previews, DST-aware timezone
+  evaluation, overlap skipping, missed-run advancement, and Run-now conflicts;
+- Codex context telemetry/compaction and exact event attribution; and
+- the live official-source agent-runtime research story documented in
+  `docs/DEMO.md`.
+
+The broader Orkestr project supplied product experience and previously explored
+ideas such as WhatsApp self-chat and workstation operations. The v0.2 code,
+migrations, UI integration, two-image release automation, reliability tests,
+demo scripts, and documentation were implemented and committed in this Lite
+repository during the event. The historical deterministic clamp workspace is
+retained only as regression infrastructure.
+
+The next immutable target is `v0.2.0-build-week`, with separate control and Desk
+digests. Its final source SHA, live GPT-5.6 evidence identifiers, screenshots,
+workflow run, and digests must be recorded only after the release gate passes;
+no placeholder is presented as completed evidence.
+
 ## Required competition artifacts
 
 - working project built with Codex and GPT-5.6
@@ -130,5 +162,6 @@ The immutable tag, image, provenance, smoke test, and amendment process are defi
 
 - The initial implementation targets Linux AMD64.
 - App-server is an evolving Codex interface, so the CLI version is pinned and compatibility is checked.
-- WhatsApp and timers are not part of the first browser-mission milestone.
+- The immutable v0.1 artifact does not include the later WhatsApp, Desk, Files,
+  terminal, context, and schedule expansion; those belong to v0.2.
 - Live GPT-5.6 acceptance passed with the host's authenticated challenge account; final submission ownership and public-video inputs remain pending.

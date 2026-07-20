@@ -42,6 +42,8 @@ test("uses last-turn context tokens and deduplicates compaction aliases", async 
       compactionCount: 0,
       updatedAt: telemetry.context().updatedAt,
       lastCompactedAt: null,
+      lastClearedAt: null,
+      visibleHistoryCleared: false,
     });
 
     telemetry.noteCompaction({ type: "contextCompaction" });
@@ -51,6 +53,22 @@ test("uses last-turn context tokens and deduplicates compaction aliases", async 
       telemetry.list().at(-1)?.kind,
       "conversation.context_compacted",
     );
+
+    const clearedAt = new Date().toISOString();
+    telemetry.resetContext(clearedAt);
+    assert.deepEqual(telemetry.context(), {
+      usedTokens: null,
+      contextWindow: null,
+      percent: null,
+      compactionCount: 0,
+      updatedAt: clearedAt,
+      lastCompactedAt: null,
+      lastClearedAt: clearedAt,
+      visibleHistoryCleared: false,
+    });
+
+    telemetry.resetContext(clearedAt, true);
+    assert.equal(telemetry.context().visibleHistoryCleared, true);
   } finally {
     database.onModuleDestroy();
     await rm(directory, { recursive: true, force: true });

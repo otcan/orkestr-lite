@@ -1,6 +1,13 @@
-import { Component, OnDestroy, OnInit, signal } from "@angular/core";
+import {
+  Component,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  signal,
+} from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { ApiService, errorText } from "./api.service";
+import { ClearContextDialogComponent } from "./clear-context-dialog.component";
 
 interface TurnView {
   id: string;
@@ -19,6 +26,7 @@ interface TurnView {
   enqueueSequence: number | null;
   queuePosition: number | null;
   attachments: AttachmentView[];
+  controlCode: string | null;
 }
 
 interface AttachmentView {
@@ -44,6 +52,7 @@ interface ConversationStatus {
   queueDepth: number;
   queueLimit: number;
   compacting: boolean;
+  clearingContext: boolean;
   context: {
     usedTokens: number | null;
     contextWindow: number | null;
@@ -51,6 +60,8 @@ interface ConversationStatus {
     updatedAt: string | null;
     compactionCount: number;
     lastCompactedAt: string | null;
+    lastClearedAt: string | null;
+    visibleHistoryCleared: boolean;
   };
 }
 
@@ -76,10 +87,11 @@ interface SetupStatus {
 const DRAFT_KEY = "orkestr.conversation.draft.v1";
 const EXECUTION_KEY = "orkestr.conversation.execution.v1";
 const FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh"];
+const DEFAULT_EFFORT = "medium";
 
 @Component({
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, ClearContextDialogComponent],
   template: `
     <main class="conversation-page">
       <section class="conversation-column" id="chat">
@@ -97,6 +109,19 @@ const FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh"];
               <span class="live-dot"></span>
               Workstation online
             </span>
+            <button
+              class="quiet clear-context-button"
+              type="button"
+              (click)="openClearContextDialog()"
+              [disabled]="!canClearContext()"
+              title="Start with clean Codex memory while keeping this transcript and workspace"
+            >
+              {{
+                conversationStatus()?.clearingContext
+                  ? "Clearing…"
+                  : "Clear context"
+              }}
+            </button>
             @if (activeTurn) {
               <button
                 class="danger"
@@ -137,13 +162,38 @@ const FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh"];
                 }
               </select>
             </label>
-            <span
-              class="yolo-mode"
-              title="No approval prompts. Codex has full access inside the isolated Ubuntu workstation."
-            >
-              <span class="yolo-dot"></span>
-              YOLO · full access
-            </span>
+            <div class="yolo-control">
+              <button
+                class="yolo-mode"
+                type="button"
+                aria-haspopup="dialog"
+                [attr.aria-expanded]="yoloPopoverOpen()"
+                (click)="yoloPopoverOpen.set(!yoloPopoverOpen())"
+              >
+                <span class="yolo-dot"></span>
+                YOLO · full access
+              </button>
+              @if (yoloPopoverOpen()) {
+                <div
+                  class="yolo-popover panel"
+                  role="dialog"
+                  aria-label="YOLO mode information"
+                >
+                  <strong>This version only has YOLO.</strong>
+                  <p>
+                    Codex runs with full access inside the isolated Ubuntu
+                    workstation. Approval prompts are disabled in Orkestr Lite.
+                  </p>
+                  <button
+                    class="quiet"
+                    type="button"
+                    (click)="yoloPopoverOpen.set(false)"
+                  >
+                    Got it
+                  </button>
+                </div>
+              }
+            </div>
           </div>
         </header>
 
@@ -233,7 +283,17 @@ const FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh"];
             </div>
           }
 
-          @for (turn of turns; track turn.id) {
+          @for (turn of turns; track turn.id; let turnIndex = $index) {
+            @if (showContextBoundaryBefore(turnIndex, turn)) {
+              <div class="context-boundary" role="status">
+                <strong>Context cleared</strong>
+                <span>
+                  Earlier messages remain visible but are no longer in Codex's
+                  memory ·
+                  {{ timestamp(conversationStatus()!.context.lastClearedAt!) }}
+                </span>
+              </div>
+            }
             <article class="conversation-turn" [attr.id]="'turn-' + turn.id">
               <div class="message user-message">
                 <div class="message-heading">
@@ -328,6 +388,12 @@ const FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh"];
                     </span>
                   </summary>
                   <div class="activity-facts">
+                    @if (turn.controlCode) {
+                      <span>
+                        <small>WhatsApp code</small>
+                        <code>{{ turn.controlCode }}</code>
+                      </span>
+                    }
                     <span>
                       <small>Created</small>
                       {{ timestamp(turn.createdAt) }}
@@ -394,6 +460,16 @@ const FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh"];
                 </details>
               </div>
             </article>
+          }
+          @if (showTrailingContextBoundary()) {
+            <div class="context-boundary" role="status">
+              <strong>Context cleared</strong>
+              <span>
+                Earlier messages remain visible but are no longer in Codex's
+                memory ·
+                {{ timestamp(conversationStatus()!.context.lastClearedAt!) }}
+              </span>
+            </div>
           }
         </section>
 
@@ -473,6 +549,12 @@ const FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh"];
           </div>
         </form>
       </section>
+      <app-clear-context-dialog
+        [open]="clearContextDialogOpen()"
+        [busy]="busy"
+        (dismissed)="closeClearContextDialog()"
+        (confirmed)="clearContext($event)"
+      />
     </main>
   `,
 })
@@ -487,6 +569,8 @@ export class ConversationComponent implements OnInit, OnDestroy {
   readonly reasoningEffort = signal("");
   readonly pendingAttachments = signal<AttachmentView[]>([]);
   readonly uploadingAttachments = signal(false);
+  readonly clearContextDialogOpen = signal(false);
+  readonly yoloPopoverOpen = signal(false);
   private readonly turnsState = signal<TurnView[]>([]);
   private readonly eventsState = signal<TurnEvent[]>([]);
   private readonly activityState = signal<Record<string, TurnEvent[]>>({});
@@ -502,6 +586,7 @@ export class ConversationComponent implements OnInit, OnDestroy {
   private lastHeartbeatAt = Date.now();
   private draftId: string = crypto.randomUUID();
   private submittedContent: string | null = null;
+  private reasoningEffortExplicit = false;
   private latestScrollPending = false;
   private latestScrollScheduled = false;
   constructor(private readonly api: ApiService) {}
@@ -565,6 +650,11 @@ export class ConversationComponent implements OnInit, OnDestroy {
     this.eventsSource?.close();
   }
 
+  @HostListener("document:keydown.escape")
+  closeYoloPopover(): void {
+    this.yoloPopoverOpen.set(false);
+  }
+
   async send(): Promise<void> {
     const content = this.content().trim();
     const attachmentIds = this.pendingAttachments().map((item) => item.id);
@@ -623,15 +713,15 @@ export class ConversationComponent implements OnInit, OnDestroy {
     const metadata = this.models().find(
       (candidate) => candidate.model === model,
     );
-    const nextEffort = options.includes(metadata?.defaultReasoningEffort || "")
-      ? metadata!.defaultReasoningEffort!
-      : options[0] || "";
-    this.reasoningEffort.set(nextEffort);
+    if (!options.includes(this.reasoningEffort())) {
+      this.reasoningEffort.set(this.defaultEffort(options, metadata));
+    }
     this.executionPreferenceChanged();
   }
 
   selectReasoningEffort(effort: string): void {
     this.reasoningEffort.set(effort);
+    this.reasoningEffortExplicit = true;
     this.executionPreferenceChanged();
   }
 
@@ -735,15 +825,67 @@ export class ConversationComponent implements OnInit, OnDestroy {
     });
   }
 
-  async startFresh(): Promise<void> {
-    const confirmed = globalThis.confirm(
-      "This clears the current conversation context. Your workspace files will not be deleted.",
+  canClearContext(): boolean {
+    const status = this.conversationStatus();
+    return Boolean(
+      status &&
+        !this.busy &&
+        !this.activeTurn &&
+        !status.queueDepth &&
+        !status.compacting &&
+        !status.clearingContext &&
+        !this.resumeError,
     );
-    if (!confirmed) return;
-    await this.action(async () => {
-      await this.api.post("/api/conversation/start-fresh");
+  }
+
+  openClearContextDialog(): void {
+    if (this.canClearContext()) this.clearContextDialogOpen.set(true);
+  }
+
+  closeClearContextDialog(): void {
+    if (this.busy) return;
+    this.clearContextDialogOpen.set(false);
+    this.focusComposer();
+  }
+
+  async clearContext(clearVisibleHistory: boolean): Promise<void> {
+    if (!this.clearContextDialogOpen() || this.busy) return;
+    this.busyState.set(true);
+    this.errorState.set("");
+    try {
+      await this.api.post("/api/conversation/clear-context", {
+        clearVisibleHistory,
+      });
+      if (clearVisibleHistory) this.clearVisibleConversationState();
       await this.refreshAll();
-    });
+    } catch (error) {
+      this.errorState.set(errorText(error));
+    } finally {
+      this.busyState.set(false);
+      this.clearContextDialogOpen.set(false);
+      this.focusComposer();
+    }
+  }
+
+  showContextBoundaryBefore(index: number, turn: TurnView): boolean {
+    const context = this.conversationStatus()?.context;
+    if (context?.visibleHistoryCleared) return false;
+    const clearedAt = context?.lastClearedAt;
+    if (!clearedAt || new Date(turn.createdAt) < new Date(clearedAt)) {
+      return false;
+    }
+    const previous = this.turns[index - 1];
+    return !previous || new Date(previous.createdAt) < new Date(clearedAt);
+  }
+
+  showTrailingContextBoundary(): boolean {
+    const context = this.conversationStatus()?.context;
+    if (context?.visibleHistoryCleared) return false;
+    const clearedAt = context?.lastClearedAt;
+    if (!clearedAt) return false;
+    return !this.turns.some(
+      (turn) => new Date(turn.createdAt) >= new Date(clearedAt),
+    );
   }
 
   async decide(
@@ -941,6 +1083,15 @@ export class ConversationComponent implements OnInit, OnDestroy {
     }
   }
 
+  private clearVisibleConversationState(): void {
+    this.turnsState.set([]);
+    this.nextCursor.set(null);
+    this.eventsState.set([]);
+    this.activityState.set({});
+    this.activityLoadingState.set(new Set());
+    this.expandedActivityState.set(new Set());
+  }
+
   private async refreshTurns(): Promise<void> {
     const result = await this.api.get<{
       data: TurnView[];
@@ -1028,11 +1179,7 @@ export class ConversationComponent implements OnInit, OnDestroy {
     const options = this.reasoningOptions();
     if (!options.includes(this.reasoningEffort())) {
       const metadata = models.find((model) => model.model === selected);
-      this.reasoningEffort.set(
-        options.includes(metadata?.defaultReasoningEffort || "")
-          ? metadata!.defaultReasoningEffort!
-          : options[0] || "",
-      );
+      this.reasoningEffort.set(this.defaultEffort(options, metadata));
     }
     this.persistExecutionPreferences();
   }
@@ -1107,10 +1254,18 @@ export class ConversationComponent implements OnInit, OnDestroy {
     try {
       const saved = JSON.parse(
         localStorage.getItem(EXECUTION_KEY) || "null",
-      ) as { model?: unknown; reasoningEffort?: unknown } | null;
+      ) as {
+        model?: unknown;
+        reasoningEffort?: unknown;
+        effortExplicit?: unknown;
+      } | null;
       if (typeof saved?.model === "string") this.selectedModel.set(saved.model);
-      if (typeof saved?.reasoningEffort === "string") {
+      if (
+        typeof saved?.reasoningEffort === "string" &&
+        saved.effortExplicit === true
+      ) {
         this.reasoningEffort.set(saved.reasoningEffort);
+        this.reasoningEffortExplicit = true;
       }
     } catch {
       localStorage.removeItem(EXECUTION_KEY);
@@ -1130,8 +1285,20 @@ export class ConversationComponent implements OnInit, OnDestroy {
       JSON.stringify({
         model: this.selectedModel(),
         reasoningEffort: this.reasoningEffort(),
+        effortExplicit: this.reasoningEffortExplicit,
       }),
     );
+  }
+
+  private defaultEffort(
+    options: string[],
+    model: CodexModelOption | undefined,
+  ): string {
+    if (options.includes(DEFAULT_EFFORT)) return DEFAULT_EFFORT;
+    if (options.includes(model?.defaultReasoningEffort || "")) {
+      return model!.defaultReasoningEffort!;
+    }
+    return options[0] || "";
   }
 
   private async action(action: () => Promise<void>): Promise<void> {
@@ -1144,6 +1311,18 @@ export class ConversationComponent implements OnInit, OnDestroy {
     } finally {
       this.busyState.set(false);
     }
+  }
+
+  private focusComposer(): void {
+    setTimeout(
+      () =>
+        document
+          .querySelector<HTMLTextAreaElement>(
+            'textarea[placeholder="Message Codex…"]',
+          )
+          ?.focus(),
+      0,
+    );
   }
 }
 

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   OnModuleDestroy,
@@ -10,7 +11,16 @@ import { Cron } from "croner";
 import { DatabaseService } from "../database/database.service.js";
 import { MissionsService } from "./missions.service.js";
 
-type ScheduleKind = "once" | "hourly" | "daily" | "weekly";
+export type ScheduleKind =
+  | "once"
+  | "interval"
+  | "hourly"
+  | "daily"
+  | "weekly"
+  | "cron";
+
+const MINIMUM_FREQUENCY_MS = 5 * 60 * 1_000;
+const MISSED_AFTER_MS = 60 * 60 * 1_000;
 
 interface TimerRow {
   id: string;
@@ -36,15 +46,18 @@ export interface TimerView {
   time: string | null;
   weekday: number | null;
   minute: number | null;
+  intervalMinutes: number | null;
+  cronExpression: string | null;
   timezone: string;
   enabled: boolean;
   nextRunAt: string | null;
   lastRunAt: string | null;
   lastTurnId: string | null;
   lastRunStatus: string | null;
+  lastRunReason: string | null;
 }
 
-interface TimerInput {
+export interface TimerInput {
   name: string;
   prompt: string;
   kind: ScheduleKind;
@@ -52,6 +65,8 @@ interface TimerInput {
   time: string | null;
   weekday: number | null;
   minute: number | null;
+  intervalMinutes: number | null;
+  cronExpression: string | null;
   timezone: string;
   enabled: boolean;
 }
@@ -111,6 +126,15 @@ export class TimersService implements OnModuleInit, OnModuleDestroy {
     return this.require(id);
   }
 
+  preview(input: unknown): { nextRuns: string[] } {
+    const parsed = parseInput(input);
+    return {
+      nextRuns: previewRuns(parsed, new Date(), 3).map((run) =>
+        run.toISOString(),
+      ),
+    };
+  }
+
   update(id: string, input: unknown): TimerView {
     const current = this.require(id);
     const body = asRecord(input);
@@ -122,6 +146,8 @@ export class TimersService implements OnModuleInit, OnModuleDestroy {
       time: body.time ?? current.time,
       weekday: body.weekday ?? current.weekday,
       minute: body.minute ?? current.minute,
+      intervalMinutes: body.intervalMinutes ?? current.intervalMinutes,
+      cronExpression: body.cronExpression ?? current.cronExpression,
       timezone: body.timezone ?? current.timezone,
       enabled: body.enabled ?? current.enabled,
     });
@@ -153,6 +179,9 @@ export class TimersService implements OnModuleInit, OnModuleDestroy {
 
   runNow(id: string): TimerView {
     const row = this.requireRow(id);
+    if (this.timerHasPendingWork(id)) {
+      throw new ConflictException("This timer already has pending work");
+    }
     const scheduledFor = `manual:${new Date().toISOString()}`;
     this.claimAndQueue(row, scheduledFor, true);
     return this.require(id);
@@ -179,9 +208,9 @@ export class TimersService implements OnModuleInit, OnModuleDestroy {
     const schedule = decodeSchedule(row);
     const lastRun = this.database.db
       .prepare(
-        "SELECT status FROM timer_runs WHERE timer_id = ? ORDER BY created_at DESC LIMIT 1",
+        "SELECT status, error FROM timer_runs WHERE timer_id = ? ORDER BY created_at DESC LIMIT 1",
       )
-      .get(row.id) as { status: string } | undefined;
+      .get(row.id) as { status: string; error: string | null } | undefined;
     return {
       id: row.id,
       name: row.name,
@@ -191,12 +220,15 @@ export class TimersService implements OnModuleInit, OnModuleDestroy {
       time: schedule.time,
       weekday: schedule.weekday,
       minute: schedule.minute,
+      intervalMinutes: schedule.intervalMinutes,
+      cronExpression: schedule.cronExpression,
       timezone: row.timezone,
       enabled: row.enabled === 1,
       nextRunAt: row.next_run_at,
       lastRunAt: row.last_run_at,
       lastTurnId: row.last_mission_id,
       lastRunStatus: lastRun?.status ?? null,
+      lastRunReason: lastRun?.error ?? null,
     };
   }
 
@@ -214,8 +246,21 @@ export class TimersService implements OnModuleInit, OnModuleDestroy {
       for (const row of due) {
         const scheduledFor = row.next_run_at as string;
         const scheduled = new Date(scheduledFor);
-        if (now.getTime() - scheduled.getTime() > 60 * 60 * 1_000) {
+        if (now.getTime() - scheduled.getTime() > MISSED_AFTER_MS) {
           this.markMissed(row, scheduledFor, now);
+          continue;
+        }
+        if (!runtimeFrequencyIsValid(row, scheduled)) {
+          this.markFailed(
+            row,
+            scheduledFor,
+            now,
+            "Schedule frequency is below five minutes",
+          );
+          continue;
+        }
+        if (this.timerHasPendingWork(row.id)) {
+          this.markSkipped(row, scheduledFor, now, "overlap");
           continue;
         }
         try {
@@ -308,9 +353,78 @@ export class TimersService implements OnModuleInit, OnModuleDestroy {
         );
     })();
   }
+
+  private markSkipped(
+    row: TimerRow,
+    scheduledFor: string,
+    now: Date,
+    reason: string,
+  ): void {
+    this.recordWithoutTurn(row, scheduledFor, now, "skipped", reason, false);
+  }
+
+  private markFailed(
+    row: TimerRow,
+    scheduledFor: string,
+    now: Date,
+    reason: string,
+  ): void {
+    this.recordWithoutTurn(row, scheduledFor, now, "failed", reason, true);
+  }
+
+  private recordWithoutTurn(
+    row: TimerRow,
+    scheduledFor: string,
+    now: Date,
+    status: "skipped" | "failed",
+    reason: string,
+    disable: boolean,
+  ): void {
+    this.database.db.transaction(() => {
+      const result = this.database.db
+        .prepare(
+          `INSERT OR IGNORE INTO timer_runs(
+            id, timer_id, scheduled_for, status, error, created_at, completed_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          randomUUID(),
+          row.id,
+          scheduledFor,
+          status,
+          reason,
+          now.toISOString(),
+          now.toISOString(),
+        );
+      if (result.changes === 0) return;
+      const next = disable ? null : nextAfter(row, now);
+      this.database.db
+        .prepare(
+          "UPDATE timers SET next_run_at = ?, enabled = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(
+          next?.toISOString() ?? null,
+          disable || row.schedule_kind === "once" ? 0 : 1,
+          now.toISOString(),
+          row.id,
+        );
+    })();
+  }
+
+  private timerHasPendingWork(timerId: string): boolean {
+    const row = this.database.db
+      .prepare(
+        `SELECT 1 AS pending FROM missions
+         WHERE timer_id = ?
+           AND status IN ('queued', 'starting', 'running', 'awaiting_approval')
+         LIMIT 1`,
+      )
+      .get(timerId) as { pending: number } | undefined;
+    return Boolean(row);
+  }
 }
 
-function parseInput(value: unknown): TimerInput {
+export function parseTimerInput(value: unknown): TimerInput {
   const body = asRecord(value);
   const name = cleanString(body.name, 120);
   const prompt = cleanString(body.prompt, 32_000);
@@ -320,7 +434,7 @@ function parseInput(value: unknown): TimerInput {
   if (
     !name ||
     !prompt ||
-    !["once", "hourly", "daily", "weekly"].includes(kind)
+    !["once", "interval", "hourly", "daily", "weekly", "cron"].includes(kind)
   ) {
     throw new BadRequestException(
       "Name, prompt, and a valid schedule are required",
@@ -331,6 +445,9 @@ function parseInput(value: unknown): TimerInput {
   const runAt = cleanString(body.runAt, 64) || null;
   const weekday = typeof body.weekday === "number" ? body.weekday : null;
   const minute = typeof body.minute === "number" ? body.minute : null;
+  const intervalMinutes =
+    typeof body.intervalMinutes === "number" ? body.intervalMinutes : null;
+  const cronExpression = cleanString(body.cronExpression, 200) || null;
   if ((kind === "daily" || kind === "weekly") && !validTime(time)) {
     throw new BadRequestException("A valid time is required");
   }
@@ -352,6 +469,22 @@ function parseInput(value: unknown): TimerInput {
   ) {
     throw new BadRequestException("Minute must be between 0 and 59");
   }
+  if (
+    kind === "interval" &&
+    (!Number.isInteger(intervalMinutes) || intervalMinutes! < 5)
+  ) {
+    throw new BadRequestException(
+      "Interval must be an integer of at least five minutes",
+    );
+  }
+  if (kind === "cron") {
+    if (!cronExpression || cronExpression.split(/\s+/).length !== 5) {
+      throw new BadRequestException(
+        "Cron expression must contain exactly five fields",
+      );
+    }
+    assertCron(cronExpression, timezone);
+  }
   return {
     name,
     prompt,
@@ -360,43 +493,60 @@ function parseInput(value: unknown): TimerInput {
     time,
     weekday,
     minute,
+    intervalMinutes,
+    cronExpression,
     timezone,
     enabled,
   };
 }
 
+const parseInput = parseTimerInput;
+
 function encodeSchedule(input: TimerInput): string {
   if (input.kind === "once") return input.runAt as string;
   if (input.kind === "hourly") return String(input.minute);
+  if (input.kind === "interval") return String(input.intervalMinutes);
+  if (input.kind === "cron") return input.cronExpression as string;
   if (input.kind === "daily") return input.time as string;
   return JSON.stringify({ time: input.time, weekday: input.weekday });
 }
 
 function decodeSchedule(
   row: TimerRow,
-): Pick<TimerInput, "runAt" | "time" | "weekday" | "minute"> {
+): Pick<
+  TimerInput,
+  "runAt" | "time" | "weekday" | "minute" | "intervalMinutes" | "cronExpression"
+> {
+  const empty = {
+    runAt: null,
+    time: null,
+    weekday: null,
+    minute: null,
+    intervalMinutes: null,
+    cronExpression: null,
+  };
   if (row.schedule_kind === "once") {
     return {
+      ...empty,
       runAt: row.schedule_value,
-      time: null,
-      weekday: null,
-      minute: null,
     };
   }
   if (row.schedule_kind === "hourly") {
     return {
-      runAt: null,
-      time: null,
-      weekday: null,
+      ...empty,
       minute: Number(row.schedule_value),
     };
   }
+  if (row.schedule_kind === "interval") {
+    return { ...empty, intervalMinutes: Number(row.schedule_value) };
+  }
+  if (row.schedule_kind === "cron") {
+    return { ...empty, cronExpression: row.schedule_value };
+  }
   if (row.schedule_kind === "daily") {
     return {
-      runAt: null,
+      ...empty,
       time: row.schedule_value,
-      weekday: null,
-      minute: null,
     };
   }
   try {
@@ -405,13 +555,12 @@ function decodeSchedule(
       weekday?: unknown;
     };
     return {
-      runAt: null,
+      ...empty,
       time: typeof value.time === "string" ? value.time : null,
       weekday: typeof value.weekday === "number" ? value.weekday : null,
-      minute: null,
     };
   } catch {
-    return { runAt: null, time: null, weekday: null, minute: null };
+    return empty;
   }
 }
 
@@ -419,6 +568,16 @@ function nextRun(input: TimerInput, after: Date): Date | null {
   if (input.kind === "once") return new Date(input.runAt as string);
   if (input.kind === "hourly") {
     return cronHourlyNext(input.minute as number, input.timezone, after);
+  }
+  if (input.kind === "interval") {
+    return new Date(after.getTime() + input.intervalMinutes! * 60_000);
+  }
+  if (input.kind === "cron") {
+    return cronExpressionNext(
+      input.cronExpression as string,
+      input.timezone,
+      after,
+    );
   }
   return cronNext(
     input.kind,
@@ -435,6 +594,16 @@ function nextAfter(row: TimerRow, after: Date): Date | null {
   if (row.schedule_kind === "hourly") {
     return cronHourlyNext(decoded.minute as number, row.timezone, after);
   }
+  if (row.schedule_kind === "interval") {
+    return new Date(after.getTime() + decoded.intervalMinutes! * 60_000);
+  }
+  if (row.schedule_kind === "cron") {
+    return cronExpressionNext(
+      decoded.cronExpression as string,
+      row.timezone,
+      after,
+    );
+  }
   if (!decoded.time) return null;
   return cronNext(
     row.schedule_kind,
@@ -443,6 +612,27 @@ function nextAfter(row: TimerRow, after: Date): Date | null {
     row.timezone,
     after,
   );
+}
+
+export function previewRuns(input: TimerInput, after: Date, count = 3): Date[] {
+  const runs: Date[] = [];
+  let cursor = after;
+  for (let index = 0; index < count; index += 1) {
+    const run = nextRun(input, cursor);
+    if (!run) break;
+    runs.push(run);
+    if (input.kind === "once") break;
+    cursor = run;
+  }
+  return runs;
+}
+
+export function cronExpressionNext(
+  expression: string,
+  timezone: string,
+  after: Date,
+): Date | null {
+  return new Cron(expression, { timezone, paused: true }).nextRun(after);
 }
 
 export function cronHourlyNext(
@@ -489,5 +679,50 @@ function assertTimezone(timezone: string): void {
     new Intl.DateTimeFormat("en", { timeZone: timezone }).format();
   } catch {
     throw new BadRequestException("Timezone is not valid");
+  }
+}
+
+function assertCron(expression: string, timezone: string): void {
+  try {
+    const cron = new Cron(expression, { timezone, paused: true });
+    let previous = cron.nextRun(new Date());
+    if (!previous) throw new Error("Cron has no future occurrence");
+    for (let index = 0; index < 20; index += 1) {
+      const next = cron.nextRun(new Date(previous.getTime() + 1));
+      if (!next) break;
+      if (next.getTime() - previous.getTime() < MINIMUM_FREQUENCY_MS) {
+        throw new BadRequestException(
+          "Cron schedules must run no more often than every five minutes",
+        );
+      }
+      previous = next;
+    }
+  } catch (error) {
+    if (error instanceof BadRequestException) throw error;
+    throw new BadRequestException("Cron expression is not valid");
+  }
+}
+
+function runtimeFrequencyIsValid(row: TimerRow, after: Date): boolean {
+  if (row.schedule_kind === "interval") {
+    return Number(row.schedule_value) >= 5;
+  }
+  if (row.schedule_kind !== "cron") return true;
+  try {
+    const first = cronExpressionNext(row.schedule_value, row.timezone, after);
+    const second = first
+      ? cronExpressionNext(
+          row.schedule_value,
+          row.timezone,
+          new Date(first.getTime() + 1),
+        )
+      : null;
+    return Boolean(
+      first &&
+        second &&
+        second.getTime() - first.getTime() >= MINIMUM_FREQUENCY_MS,
+    );
+  } catch {
+    return false;
   }
 }

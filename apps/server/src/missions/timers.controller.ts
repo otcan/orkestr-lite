@@ -25,6 +25,11 @@ export class TimersController {
     return this.timers.create(body);
   }
 
+  @Post("preview")
+  preview(@Body() body: unknown) {
+    return this.timers.preview(body);
+  }
+
   @Patch(":id")
   update(@Param("id", new ParseUUIDPipe()) id: string, @Body() body: unknown) {
     return this.timers.update(id, body);

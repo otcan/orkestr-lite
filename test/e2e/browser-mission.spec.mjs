@@ -66,9 +66,15 @@ test("runs one persistent conversation from the browser", async ({ page }) => {
 
     await page.getByRole("button", { name: "Open Orkestr" }).click();
     await expect(page).toHaveURL(`http://127.0.0.1:${port}/chat`);
+    await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
+    await expect(page.getByLabel("Codex model")).toHaveValue("gpt-5.6");
+    await expect(page.getByLabel("Reasoning effort")).toHaveValue("medium");
+    await expect(page.getByText("YOLO · full access")).toBeVisible();
+    await page.getByRole("button", { name: "YOLO · full access" }).click();
     await expect(
-      page.getByRole("heading", { name: "What should Codex do?" }),
-    ).toBeVisible();
+      page.getByRole("dialog", { name: "YOLO mode information" }),
+    ).toContainText("This version only has YOLO.");
+    await page.getByRole("button", { name: "Got it" }).click();
     await expect(page.getByText("Mission", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Thread", { exact: true })).toHaveCount(0);
     await page
@@ -78,27 +84,116 @@ test("runs one persistent conversation from the browser", async ({ page }) => {
       );
     await page.getByRole("button", { name: "Send", exact: true }).click();
 
-    await expect(page).toHaveURL(
-      new RegExp(`http://127\\.0\\.0\\.1:${port}/chat/[0-9a-f-]+`),
-    );
+    await expect(page).toHaveURL(`http://127.0.0.1:${port}/chat`);
     await expect(page.getByText("Thread", { exact: true })).toHaveCount(0);
     await expect(page.getByText(/Completed in \d+ seconds/)).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText("3 tests passed")).toBeVisible();
     await expect(page.locator(".codex-message")).toContainText(
       "Corrected the reversed clamp bounds",
     );
+    await page.getByText("Activity log", { exact: true }).click();
+    await expect(page.locator(".activity-timeline")).toContainText("npm test");
     await expect(page.locator(".activity-timeline")).toContainText(
       "Response completed",
+    );
+    await expect(page.locator(".activity-facts")).toContainText(
+      "WhatsApp code",
     );
     await page.reload();
     await expect(page.locator(".codex-message")).toContainText(
       "Corrected the reversed clamp bounds",
     );
+    const clearContext = page
+      .locator(".conversation-header")
+      .getByRole("button", { name: "Clear context" });
+    await clearContext.click();
+    const clearDialog = page.getByRole("dialog", { name: "Clear context?" });
+    await expect(clearDialog).toContainText(
+      "Workspace files, Desk, WhatsApp data, and timers will stay intact.",
+    );
+    await expect(
+      clearDialog.getByLabel("Also clear visible chat history"),
+    ).not.toBeChecked();
+    await clearDialog.getByRole("button", { name: "Keep context" }).click();
+    await expect(clearDialog).toHaveCount(0);
+    await clearContext.click();
+    await clearDialog.getByRole("button", { name: "Clear context" }).click();
+    await expect(page.locator(".context-boundary")).toContainText(
+      "Earlier messages remain visible but are no longer in Codex's memory",
+    );
+    await expect(page.locator(".codex-message")).toContainText(
+      "Corrected the reversed clamp bounds",
+    );
+    await expect(page.getByPlaceholder("Message Codex…")).toBeFocused();
+    await clearContext.click();
+    await clearDialog
+      .getByLabel("Also clear visible chat history")
+      .setChecked(true);
+    await clearDialog.getByRole("button", { name: "Clear context" }).click();
+    await expect(page.locator(".codex-message")).toHaveCount(0);
+    await expect(page.locator(".conversation-empty")).toContainText(
+      "One conversation. One workspace.",
+    );
+    await expect(page.getByPlaceholder("Message Codex…")).toBeFocused();
     await captureMedia(page, "conversation-complete.png");
 
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.goto(`http://127.0.0.1:${port}/chat/${crypto.randomUUID()}`);
+    await expect(page).toHaveURL(`http://127.0.0.1:${port}/chat`);
+
+    await page.goto(`http://127.0.0.1:${port}/timers`);
+    await page.getByLabel("Name").fill("Weekly agent runtime watch");
+    await page.getByLabel("Schedule").selectOption("cron");
+    await page.getByLabel("Five-field cron expression").fill("0 9 * * 1");
+    await page
+      .getByLabel("Message for Codex")
+      .fill("Review the agent runtime report for changes.");
+    await page.getByRole("button", { name: "Preview" }).click();
+    await expect(page.locator(".schedule-preview span")).toHaveCount(3);
+    await page.getByRole("button", { name: "Add timer" }).click();
+    const timer = page.locator(".timer-row", {
+      hasText: "Weekly agent runtime watch",
+    });
+    await expect(timer).toContainText("Cron · 0 9 * * 1");
+    await timer.getByRole("button", { name: "Run now" }).click();
+    await expect(timer).toContainText("queued");
+
+    await page.goto(`http://127.0.0.1:${port}/settings`);
+    await expect(
+      page.getByRole("button", { name: "Clear context" }),
+    ).toBeVisible();
+    await expect(page.getByText("Start a new conversation")).toHaveCount(0);
+    await page.getByText("WhatsApp command reference", { exact: true }).click();
+    await expect(page.locator(".wa-command-help")).toContainText(
+      "approve CODE",
+    );
+    await expect(page.locator(".wa-command-help")).toContainText(
+      "whole message",
+    );
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Menu" }).click();
+    const mobileNavigation = page.getByRole("navigation", {
+      name: "Mobile navigation",
+    });
+    await expect(mobileNavigation).toContainText("Navigate Orkestr");
+    await mobileNavigation.getByRole("link", { name: /Terminal/ }).click();
+    await expect(page).toHaveURL(`http://127.0.0.1:${port}/terminal`);
+    await expect(page.getByLabel("Workspace terminal")).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.documentElement.scrollHeight <=
+            document.documentElement.clientHeight + 1,
+        ),
+      )
+      .toBe(true);
+    await page.getByRole("button", { name: "Menu" }).click();
+    await page
+      .getByRole("navigation", { name: "Mobile navigation" })
+      .getByRole("button", { name: "Sign out" })
+      .click();
     await expect(page.getByLabel("Administrator password")).toBeVisible();
 
     assertFixtureChanged(

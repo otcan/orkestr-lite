@@ -15,6 +15,8 @@ export interface ContextSnapshot {
   compactionCount: number;
   updatedAt: string | null;
   lastCompactedAt: string | null;
+  lastClearedAt: string | null;
+  visibleHistoryCleared: boolean;
 }
 
 @Injectable()
@@ -104,6 +106,25 @@ export class ConversationTelemetryService {
     this.append("conversation.context_compacted", payload);
   }
 
+  resetContext(clearedAt: string, visibleHistoryCleared = false): void {
+    this.database.setSetting(
+      "conversation.context",
+      JSON.stringify({
+        usedTokens: null,
+        contextWindow: null,
+        updatedAt: clearedAt,
+      }),
+    );
+    this.database.setSetting("conversation.compaction_seen_at", "0");
+    this.database.setSetting("conversation.compaction_count", "0");
+    this.database.setSetting("conversation.last_compacted_at", "");
+    this.database.setSetting("conversation.last_cleared_at", clearedAt);
+    this.database.setSetting(
+      "conversation.visible_history_cleared",
+      visibleHistoryCleared ? "true" : "false",
+    );
+  }
+
   context(): ContextSnapshot {
     const stored = parseJson(
       this.database.getSetting("conversation.context") ?? "{}",
@@ -122,7 +143,12 @@ export class ConversationTelemetryService {
       ),
       updatedAt: typeof stored.updatedAt === "string" ? stored.updatedAt : null,
       lastCompactedAt:
-        this.database.getSetting("conversation.last_compacted_at") ?? null,
+        this.database.getSetting("conversation.last_compacted_at") || null,
+      lastClearedAt:
+        this.database.getSetting("conversation.last_cleared_at") || null,
+      visibleHistoryCleared:
+        this.database.getSetting("conversation.visible_history_cleared") ===
+        "true",
     };
   }
 }

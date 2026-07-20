@@ -1,6 +1,6 @@
 {
   "name": "@orkestr/server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "../../dist/server/main.js",
@@ -9,15 +9,15 @@
     "dev": "node --watch --import tsx src/main.ts",
     "start": "node ../../dist/server/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test ../../dist/server/missions/mission.repository.test.js ../../dist/server/missions/conversation-telemetry.service.test.js ../../dist/server/missions/attachments.service.test.js ../../dist/server/missions/timers.service.test.js ../../dist/server/missions/workspace.service.test.js ../../dist/server/codex/codex.service.test.js ../../dist/server/whatsapp/whatsapp.service.test.js"
+    "test": "node --test ../../dist/server/database/migrations.test.js ../../dist/server/desk-agent/chromium-profile.test.js ../../dist/server/missions/mission.repository.test.js ../../dist/server/missions/conversation-telemetry.service.test.js ../../dist/server/missions/missions.service.test.js ../../dist/server/missions/attachments.service.test.js ../../dist/server/missions/timers.service.test.js ../../dist/server/missions/workspace.service.test.js ../../dist/server/codex/codex.service.test.js ../../dist/server/whatsapp/whatsapp.service.test.js"
   },
   "dependencies": {
     "@nestjs/common": "11.1.28",
     "@nestjs/core": "11.1.28",
     "@nestjs/platform-express": "11.1.28",
     "@nestjs/serve-static": "5.0.5",
-    "@orkestr/codex-client": "0.1.0",
-    "@orkestr/shared": "0.1.0",
+    "@orkestr/codex-client": "0.2.0",
+    "@orkestr/shared": "0.2.0",
     "@types/ws": "^8.18.1",
     "better-sqlite3": "12.11.1",
     "croner": "^10.0.1",

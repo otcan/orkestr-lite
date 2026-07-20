@@ -244,4 +244,40 @@ export const migrations: Migration[] = [
         ON whatsapp_inbox_messages(sender_name, message_at DESC);
     `,
   },
+  {
+    version: 6,
+    name: "operational_controls",
+    sql: `
+      DROP INDEX timer_runs_timer_idx;
+      ALTER TABLE timer_runs RENAME TO timer_runs_v5;
+
+      CREATE TABLE timer_runs (
+        id TEXT PRIMARY KEY,
+        timer_id TEXT NOT NULL REFERENCES timers(id) ON DELETE CASCADE,
+        scheduled_for TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('claimed', 'queued', 'missed', 'skipped', 'failed')),
+        turn_id TEXT REFERENCES missions(id),
+        error TEXT,
+        created_at TEXT NOT NULL,
+        completed_at TEXT,
+        UNIQUE(timer_id, scheduled_for)
+      );
+
+      INSERT INTO timer_runs(
+        id, timer_id, scheduled_for, status, turn_id, error, created_at, completed_at
+      )
+      SELECT
+        id, timer_id, scheduled_for, status, turn_id, error, created_at, completed_at
+      FROM timer_runs_v5;
+
+      DROP TABLE timer_runs_v5;
+      CREATE INDEX timer_runs_timer_idx ON timer_runs(timer_id, scheduled_for DESC);
+
+      CREATE TABLE turn_control_codes (
+        turn_id TEXT PRIMARY KEY REFERENCES missions(id) ON DELETE CASCADE,
+        code TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        created_at TEXT NOT NULL
+      );
+    `,
+  },
 ];

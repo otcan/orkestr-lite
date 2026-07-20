@@ -48,6 +48,20 @@ export class ConversationController {
     return this.turns.startFresh();
   }
 
+  @Post("conversation/clear-context")
+  clearContext(@Body() body: unknown) {
+    const input = body as { clearVisibleHistory?: unknown };
+    if (
+      input?.clearVisibleHistory !== undefined &&
+      typeof input.clearVisibleHistory !== "boolean"
+    ) {
+      throw new BadRequestException("clearVisibleHistory must be a boolean");
+    }
+    return this.turns.clearContext({
+      clearVisibleHistory: input?.clearVisibleHistory === true,
+    });
+  }
+
   @Post("conversation/retry")
   retry() {
     return this.turns.retryConversation();
@@ -85,6 +99,7 @@ export class ConversationController {
           turn,
           this.turns.queuePosition(turn.id),
           this.attachments.listForTurn(turn.id),
+          this.turns.controlCode(turn.id),
         ),
       );
     return {
@@ -159,6 +174,7 @@ export class ConversationController {
       turn,
       this.turns.queuePosition(turn.id),
       this.attachments.listForTurn(turn.id),
+      this.turns.controlCode(turn.id),
     );
   }
 
@@ -191,6 +207,7 @@ export class ConversationController {
       this.turns.get(id),
       this.turns.queuePosition(id),
       this.attachments.listForTurn(id),
+      this.turns.controlCode(id),
     );
   }
 
@@ -202,7 +219,12 @@ export class ConversationController {
   @Post("turns/:id/stop")
   async stop(@Param("id", new ParseUUIDPipe()) id: string) {
     const turn = await this.turns.interrupt(id);
-    return turnView(turn, null, this.attachments.listForTurn(id));
+    return turnView(
+      turn,
+      null,
+      this.attachments.listForTurn(id),
+      this.turns.controlCode(id),
+    );
   }
 
   @Post("turns/:id/approve")
@@ -213,6 +235,7 @@ export class ConversationController {
       this.turns.approve(id, parsed.data),
       null,
       this.attachments.listForTurn(id),
+      this.turns.controlCode(id),
     );
   }
 }
@@ -221,6 +244,7 @@ function turnView(
   turn: ReturnType<MissionsService["get"]>,
   queuePosition: number | null = null,
   attachments: AttachmentView[] = [],
+  controlCode: string | null = null,
 ) {
   return {
     id: turn.id,
@@ -239,6 +263,7 @@ function turnView(
     enqueueSequence: turn.enqueueSequence,
     queuePosition,
     attachments,
+    controlCode,
   };
 }
 
