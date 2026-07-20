@@ -1,7 +1,13 @@
 import { Component, OnInit, signal } from "@angular/core";
 import { ApiService, errorText } from "./api.service";
 
-type ScheduleKind = "once" | "hourly" | "daily" | "weekly";
+type ScheduleKind =
+  | "once"
+  | "interval"
+  | "hourly"
+  | "daily"
+  | "weekly"
+  | "cron";
 
 interface TimerView {
   id: string;
@@ -12,12 +18,15 @@ interface TimerView {
   time: string | null;
   weekday: number | null;
   minute: number | null;
+  intervalMinutes: number | null;
+  cronExpression: string | null;
   timezone: string;
   enabled: boolean;
   nextRunAt: string | null;
   lastRunAt: string | null;
   lastTurnId: string | null;
   lastRunStatus: string | null;
+  lastRunReason: string | null;
 }
 
 @Component({
@@ -58,9 +67,11 @@ interface TimerView {
             (change)="kind.set($any($event.target).value)"
           >
             <option value="once">Once</option>
+            <option value="interval">Interval</option>
             <option value="hourly">Hourly</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
+            <option value="cron">Cron</option>
           </select>
         </label>
         @if (kind() === "once") {
@@ -73,6 +84,19 @@ interface TimerView {
               required
             />
           </label>
+        } @else if (kind() === "interval") {
+          <label>
+            Every (minutes)
+            <input
+              type="number"
+              min="5"
+              step="1"
+              [value]="intervalMinutes()"
+              (input)="intervalMinutes.set(+$any($event.target).value)"
+              required
+            />
+            <small>Minimum: five minutes</small>
+          </label>
         } @else if (kind() === "hourly") {
           <label>
             Minute past the hour
@@ -84,6 +108,19 @@ interface TimerView {
               (input)="minute.set(+$any($event.target).value)"
               required
             />
+          </label>
+        } @else if (kind() === "cron") {
+          <label>
+            Five-field cron expression
+            <input
+              type="text"
+              maxlength="200"
+              placeholder="0 9 * * 1"
+              [value]="cronExpression()"
+              (input)="cronExpression.set($any($event.target).value)"
+              required
+            />
+            <small>Minute hour day-of-month month day-of-week</small>
           </label>
         } @else {
           @if (kind() === "weekly") {
@@ -123,6 +160,9 @@ interface TimerView {
         <div class="composer-footer timer-footer">
           <span>{{ timezone }}</span>
           <div class="timer-actions">
+            <button type="button" (click)="preview()" [disabled]="busy">
+              Preview
+            </button>
             @if (editingId()) {
               <button type="button" (click)="resetForm()">Cancel</button>
             }
@@ -131,7 +171,22 @@ interface TimerView {
             </button>
           </div>
         </div>
+        @if (previewError()) {
+          <p class="error">{{ previewError() }}</p>
+        } @else if (previewRuns().length) {
+          <div class="schedule-preview" aria-live="polite">
+            <strong>Next runs</strong>
+            @for (run of previewRuns(); track run) {
+              <span>{{ date(run) }}</span>
+            }
+          </div>
+        }
       </form>
+
+      <p class="muted schedule-note">
+        Overlapping occurrences are recorded as skipped. After downtime, Orkestr
+        records one missed run and advances without backfilling.
+      </p>
 
       <section class="timer-list">
         @if (!timers.length) {
@@ -157,7 +212,11 @@ interface TimerView {
                 @if (timer.lastRunAt) {
                   · last {{ date(timer.lastRunAt) }} ({{
                     timer.lastRunStatus || "queued"
-                  }})
+                  }}
+                  @if (timer.lastRunReason) {
+                    · {{ timer.lastRunReason }}
+                  }
+                  )
                 }
               </small>
             </div>
@@ -193,7 +252,11 @@ export class TimersComponent implements OnInit {
   readonly time = signal("09:00");
   readonly weekday = signal(1);
   readonly minute = signal(0);
+  readonly intervalMinutes = signal(60);
+  readonly cronExpression = signal("0 9 * * 1");
   readonly runAt = signal(defaultLocalDateTime());
+  readonly previewRuns = signal<string[]>([]);
+  readonly previewError = signal("");
   readonly editingId = signal<string | null>(null);
   readonly timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   readonly weekdays = [
@@ -226,11 +289,16 @@ export class TimersComponent implements OnInit {
         this.prompt().trim() &&
         (this.kind() === "once"
           ? this.runAt()
-          : this.kind() === "hourly"
-            ? Number.isInteger(this.minute()) &&
-              this.minute() >= 0 &&
-              this.minute() <= 59
-            : this.time()),
+          : this.kind() === "interval"
+            ? Number.isInteger(this.intervalMinutes()) &&
+              this.intervalMinutes() >= 5
+            : this.kind() === "hourly"
+              ? Number.isInteger(this.minute()) &&
+                this.minute() >= 0 &&
+                this.minute() <= 59
+              : this.kind() === "cron"
+                ? this.cronExpression().trim().split(/\s+/).length === 5
+                : this.time()),
     );
   }
 
@@ -239,17 +307,8 @@ export class TimersComponent implements OnInit {
   }
 
   async save(): Promise<void> {
-    const body = {
-      name: this.name(),
-      prompt: this.prompt(),
-      kind: this.kind(),
-      time: ["once", "hourly"].includes(this.kind()) ? null : this.time(),
-      weekday: this.kind() === "weekly" ? this.weekday() : null,
-      minute: this.kind() === "hourly" ? this.minute() : null,
-      runAt:
-        this.kind() === "once" ? new Date(this.runAt()).toISOString() : null,
-      timezone: this.timezone,
-    };
+    if (!(await this.loadPreview())) return;
+    const body = this.scheduleBody();
     await this.run(async () => {
       const id = this.editingId();
       if (id) await this.api.patch(`/api/timers/${id}`, body);
@@ -266,6 +325,8 @@ export class TimersComponent implements OnInit {
     this.time.set(timer.time || "09:00");
     this.weekday.set(timer.weekday ?? 1);
     this.minute.set(timer.minute ?? 0);
+    this.intervalMinutes.set(timer.intervalMinutes ?? 60);
+    this.cronExpression.set(timer.cronExpression ?? "0 9 * * 1");
     this.runAt.set(
       timer.runAt ? toLocalDateTime(timer.runAt) : defaultLocalDateTime(),
     );
@@ -280,7 +341,11 @@ export class TimersComponent implements OnInit {
     this.time.set("09:00");
     this.weekday.set(1);
     this.minute.set(0);
+    this.intervalMinutes.set(60);
+    this.cronExpression.set("0 9 * * 1");
     this.runAt.set(defaultLocalDateTime());
+    this.previewRuns.set([]);
+    this.previewError.set("");
   }
 
   async toggle(timer: TimerView): Promise<void> {
@@ -301,6 +366,9 @@ export class TimersComponent implements OnInit {
       return `Once at ${timer.runAt ? this.date(timer.runAt) : "—"}`;
     if (timer.kind === "hourly")
       return `Hourly at :${String(timer.minute ?? 0).padStart(2, "0")}`;
+    if (timer.kind === "interval")
+      return `Every ${timer.intervalMinutes} minutes`;
+    if (timer.kind === "cron") return `Cron · ${timer.cronExpression}`;
     if (timer.kind === "weekly")
       return `${this.weekdays[timer.weekday ?? 0]} at ${timer.time}`;
     return `Daily at ${timer.time}`;
@@ -308,6 +376,43 @@ export class TimersComponent implements OnInit {
 
   date(value: string): string {
     return new Date(value).toLocaleString();
+  }
+
+  async preview(): Promise<void> {
+    await this.loadPreview();
+  }
+
+  private scheduleBody() {
+    return {
+      name: this.name() || "Schedule preview",
+      prompt: this.prompt() || "Preview this schedule.",
+      kind: this.kind(),
+      time: ["daily", "weekly"].includes(this.kind()) ? this.time() : null,
+      weekday: this.kind() === "weekly" ? this.weekday() : null,
+      minute: this.kind() === "hourly" ? this.minute() : null,
+      intervalMinutes:
+        this.kind() === "interval" ? this.intervalMinutes() : null,
+      cronExpression: this.kind() === "cron" ? this.cronExpression() : null,
+      runAt:
+        this.kind() === "once" ? new Date(this.runAt()).toISOString() : null,
+      timezone: this.timezone,
+    };
+  }
+
+  private async loadPreview(): Promise<boolean> {
+    this.previewError.set("");
+    try {
+      const result = await this.api.post<{ nextRuns: string[] }>(
+        "/api/timers/preview",
+        this.scheduleBody(),
+      );
+      this.previewRuns.set(result.nextRuns);
+      return true;
+    } catch (error) {
+      this.previewRuns.set([]);
+      this.previewError.set(errorText(error));
+      return false;
+    }
   }
 
   private async refresh(): Promise<void> {

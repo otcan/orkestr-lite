@@ -17,7 +17,7 @@ jobs:
   publish:
     if: github.repository == 'otcan/orkestr-lite'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       attestations: write
       contents: write
@@ -31,7 +31,22 @@ jobs:
       - name: Set up Node.js 22
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version: 22.23.1
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify immutable v0.2 release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "$RELEASE_TAG" = "v$(node -p 'require("./package.json").version')-build-week"
+
+      - name: Install browser-test dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the full release gate
+        run: npm run check:release
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -43,66 +58,117 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare immutable image metadata
-        id: meta
+      - name: Prepare control image metadata
+        id: control-meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: latest=false
           tags: |
-            type=ref,event=tag
+            type=raw,value=${{ github.ref_name }}
             type=sha,format=long,prefix=sha-
           labels: |
-            org.opencontainers.image.title=Orkestr Lite
-            org.opencontainers.image.description=Persistent Codex missions from the browser
+            org.opencontainers.image.title=Orkestr Lite control
+            org.opencontainers.image.description=Local operational runtime for Codex
             org.opencontainers.image.licenses=Apache-2.0
 
-      - name: Build and publish Linux AMD64 image
-        id: push
+      - name: Prepare Desk image metadata
+        id: desk-meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ github.ref_name }}-desk
+            type=sha,format=long,prefix=sha-desk-
+          labels: |
+            org.opencontainers.image.title=Orkestr Lite Desk
+            org.opencontainers.image.description=Private Ubuntu desktop paired with Orkestr Lite
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Build and publish Linux AMD64 control image
+        id: control-push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
+          target: final
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.control-meta.outputs.tags }}
+          labels: ${{ steps.control-meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Attest image provenance
+      - name: Build and publish Linux AMD64 Desk image
+        id: desk-push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: desk-runtime
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.desk-meta.outputs.tags }}
+          labels: ${{ steps.desk-meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Attest control image provenance
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.control-push.outputs.digest }}
           push-to-registry: true
 
-      - name: Smoke test the published digest
+      - name: Attest Desk image provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.desk-push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Smoke test the published pair
         env:
-          ORKESTR_SMOKE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
-        run: node test/smoke/docker-smoke.mjs
+          ORKESTR_SMOKE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.control-push.outputs.digest }}
+          ORKESTR_SMOKE_DESK_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.desk-push.outputs.digest }}
+        run: npm run test:docker:pair
 
       - name: Create immutable GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          CONTROL_DIGEST: ${{ steps.control-push.outputs.digest }}
+          DESK_DIGEST: ${{ steps.desk-push.outputs.digest }}
           IMAGE_NAME_WITH_REGISTRY: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           RELEASE_TAG: ${{ github.ref_name }}
           SOURCE_COMMIT: ${{ github.sha }}
         run: |
           notes_file="$RUNNER_TEMP/release-notes.md"
+          manifest_file="$RUNNER_TEMP/release-manifest.txt"
+          checksums_file="$RUNNER_TEMP/SHA256SUMS"
           printf '%s\n' \
-            "# Orkestr Lite Build Week release" \
+            "source_sha=$SOURCE_COMMIT" \
+            "control=$IMAGE_NAME_WITH_REGISTRY@$CONTROL_DIGEST" \
+            "desk=$IMAGE_NAME_WITH_REGISTRY@$DESK_DIGEST" \
+            > "$manifest_file"
+          (cd "$RUNNER_TEMP" && sha256sum release-manifest.txt > SHA256SUMS)
+          printf '%s\n' \
+            "# Orkestr Lite v0.2 Build Week" \
             "" \
-            "- Tag: \`$RELEASE_TAG\`" \
             "- Source commit: \`$SOURCE_COMMIT\`" \
-            "- Linux AMD64 image: \`$IMAGE_NAME_WITH_REGISTRY@$IMAGE_DIGEST\`" \
-            "- Provenance: generated by GitHub artifact attestations" \
+            "- Control: \`$IMAGE_NAME_WITH_REGISTRY@$CONTROL_DIGEST\`" \
+            "- Desk: \`$IMAGE_NAME_WITH_REGISTRY@$DESK_DIGEST\`" \
+            "- Platform: Linux AMD64" \
+            "- Provenance: GitHub artifact attestations for both digests" \
             "" \
-            "The workflow smoke-tested this exact digest after publication. See RELEASE.md at the tagged commit for anonymous pull, clean-start, verification, and post-freeze rules." \
+            "Judge commands:" \
+            "\`ORKESTR_IMAGE=$IMAGE_NAME_WITH_REGISTRY@$CONTROL_DIGEST ORKESTR_DESK_IMAGE=$IMAGE_NAME_WITH_REGISTRY@$DESK_DIGEST docker compose --profile desk up -d\`" \
+            "" \
+            "Limitations: single user, local loopback access, one shared conversation, one active Codex turn, and user-supplied Codex/WhatsApp authentication. No hosted service, webhook ingress, or public automation API is included." \
             > "$notes_file"
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Orkestr Lite Build Week — $RELEASE_TAG" \
             --notes-file "$notes_file" \
             --verify-tag \
-            --latest
+            --latest \
+            "$manifest_file" \
+            "$checksums_file"

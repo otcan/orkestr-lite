@@ -10,5 +10,11 @@ export default defineConfig({
   use: {
     headless: true,
     trace: "retain-on-failure",
+    launchOptions: process.env.ORKESTR_PLAYWRIGHT_EXECUTABLE_PATH
+      ? {
+          executablePath: process.env.ORKESTR_PLAYWRIGHT_EXECUTABLE_PATH,
+          args: ["--no-sandbox", "--disable-dev-shm-usage"],
+        }
+      : {},
   },
 });

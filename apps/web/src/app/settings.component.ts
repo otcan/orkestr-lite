@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { ApiService, errorText } from "./api.service";
+import { ClearContextDialogComponent } from "./clear-context-dialog.component";
 
 interface SettingsStatus {
   codex: {
@@ -20,6 +21,7 @@ interface ConversationStatus {
   queueDepth: number;
   queueLimit: number;
   compacting: boolean;
+  clearingContext: boolean;
   context: {
     usedTokens: number | null;
     contextWindow: number | null;
@@ -27,6 +29,8 @@ interface ConversationStatus {
     updatedAt: string | null;
     compactionCount: number;
     lastCompactedAt: string | null;
+    lastClearedAt: string | null;
+    visibleHistoryCleared: boolean;
   };
 }
 
@@ -80,7 +84,7 @@ interface WhatsAppMessage {
 
 @Component({
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, ClearContextDialogComponent],
   template: `
     <main class="page narrow settings-page">
       <header class="page-header">
@@ -210,6 +214,27 @@ interface WhatsAppMessage {
             </button>
           }
         </div>
+        <details class="wa-command-help">
+          <summary>WhatsApp command reference</summary>
+          <p class="muted">
+            Commands work only in the linked account's self-chat and must be the
+            whole message. All other text is sent to Codex.
+          </p>
+          <dl>
+            <dt><code>status</code></dt>
+            <dd>Show active work and up to five queued items.</dd>
+            <dt><code>status CODE</code></dt>
+            <dd>Show the durable state of one turn.</dd>
+            <dt><code>stop CODE</code></dt>
+            <dd>Cancel queued work or stop the active turn.</dd>
+            <dt><code>approve CODE</code></dt>
+            <dd>Accept the latest pending Codex approval.</dd>
+            <dt><code>decline CODE</code></dt>
+            <dd>Decline the latest pending Codex approval.</dd>
+            <dt><code>help</code></dt>
+            <dd>Send this reference to WhatsApp.</dd>
+          </dl>
+        </details>
         @if (messages.length) {
           <div class="wa-message-list">
             <p class="eyebrow">Recent messages</p>
@@ -288,20 +313,31 @@ interface WhatsAppMessage {
           {{ conversation?.compacting ? "Compacting…" : "Compact context now" }}
         </button>
         <hr />
-        <h2>Start a new conversation</h2>
+        <h2>Clear Codex context</h2>
         <p class="muted">
-          Clears the current conversation context. Your workspace files will not
-          be deleted.
+          Starts with clean Codex memory. The visible chat, workspace files,
+          WhatsApp data, and timers are preserved.
         </p>
         <button
           class="danger"
           type="button"
-          (click)="startFresh()"
-          [disabled]="busy"
+          (click)="openClearContextDialog()"
+          [disabled]="
+            busy ||
+            !!conversation?.queueDepth ||
+            !!conversation?.compacting ||
+            !!conversation?.clearingContext
+          "
         >
-          Start fresh
+          {{ conversation?.clearingContext ? "Clearing…" : "Clear context" }}
         </button>
       </section>
+      <app-clear-context-dialog
+        [open]="clearContextDialogOpen()"
+        [busy]="busy"
+        (dismissed)="clearContextDialogOpen.set(false)"
+        (confirmed)="clearContext($event)"
+      />
     </main>
   `,
 })
@@ -314,6 +350,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   private readonly outboxState = signal<WhatsAppOutboxItem[]>([]);
   private readonly busyState = signal(false);
   private readonly errorState = signal("");
+  readonly clearContextDialogOpen = signal(false);
   private eventsSource: EventSource | null = null;
 
   constructor(private readonly api: ApiService) {}
@@ -401,12 +438,26 @@ export class SettingsComponent implements OnInit, OnDestroy {
     return value ? new Date(value).toLocaleString() : "";
   }
 
-  async startFresh(): Promise<void> {
-    const confirmed = globalThis.confirm(
-      "This clears the current conversation context. Your workspace files will not be deleted.",
+  openClearContextDialog(): void {
+    if (
+      this.busy ||
+      this.conversation?.queueDepth ||
+      this.conversation?.compacting ||
+      this.conversation?.clearingContext
+    ) {
+      return;
+    }
+    this.clearContextDialogOpen.set(true);
+  }
+
+  async clearContext(clearVisibleHistory: boolean): Promise<void> {
+    if (!this.clearContextDialogOpen() || this.busy) return;
+    await this.run(() =>
+      this.api.post("/api/conversation/clear-context", {
+        clearVisibleHistory,
+      }),
     );
-    if (!confirmed) return;
-    await this.run(() => this.api.post("/api/conversation/start-fresh"));
+    this.clearContextDialogOpen.set(false);
   }
 
   private async refresh(): Promise<void> {

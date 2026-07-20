@@ -28,6 +28,7 @@ import { MissionEventBus } from "./mission-event.bus.js";
 import { MissionRepository } from "./mission.repository.js";
 import { ConversationTelemetryService } from "./conversation-telemetry.service.js";
 import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 import { AttachmentsService } from "./attachments.service.js";
 
 const MAX_PENDING_TURNS = 250;
@@ -63,6 +64,7 @@ export class MissionsService implements OnModuleInit {
   private threadPromise: Promise<string> | null = null;
   private conversationError: string | null = null;
   private compacting = false;
+  private clearingContext = false;
   private dispatchPaused = false;
   private dispatchRetryTimer: NodeJS.Timeout | null = null;
   private compactionTimer: NodeJS.Timeout | null = null;
@@ -141,6 +143,7 @@ export class MissionsService implements OnModuleInit {
       queueDepth: this.repository.pendingCount(),
       queueLimit: MAX_PENDING_TURNS,
       compacting: this.compacting,
+      clearingContext: this.clearingContext,
       context: this.telemetry.context(),
       dispatchPaused: this.dispatchPaused,
       activeTurnId: this.activeMissionId,
@@ -155,36 +158,92 @@ export class MissionsService implements OnModuleInit {
     return this.conversationStatus();
   }
 
-  async startFresh(): Promise<
-    ReturnType<MissionsService["conversationStatus"]>
-  > {
-    const busy = this.repository.pendingCount() > 0;
-    if (busy) {
+  async clearContext(
+    options: { clearVisibleHistory?: boolean } = {},
+  ): Promise<ReturnType<MissionsService["conversationStatus"]>> {
+    if (
+      this.activeMissionId ||
+      this.repository.pendingCount() > 0 ||
+      this.compacting ||
+      this.clearingContext ||
+      this.threadPromise
+    ) {
       throw new ConflictException(
-        "Stop the current response and let the queue clear before starting fresh",
+        "Wait for active, queued, or context maintenance work before clearing context",
       );
     }
+    const status = this.codex.snapshot();
+    if (
+      status.process !== "ready" ||
+      !status.authenticated ||
+      !status.modelReady
+    ) {
+      throw new ServiceUnavailableException("Codex is not ready");
+    }
+
     const previous = this.database.getSetting("active_codex_thread_id");
-    if (previous) {
+    this.clearingContext = true;
+    try {
+      const thread = await this.codex.startThread({
+        cwd: this.config.workspace,
+        model: this.codex.selectedModel(),
+        developerInstructions: WORKSTATION_CAPABILITIES,
+      });
+      const threadId = thread.thread.id;
+      const model = thread.thread.model ?? this.codex.selectedModel();
+      const clearedAt = new Date().toISOString();
       const archived = parseStringList(
         this.database.getSetting("archived_codex_thread_ids"),
       );
-      archived.push(previous);
-      this.database.setSetting(
-        "archived_codex_thread_ids",
-        JSON.stringify([...new Set(archived)].slice(-25)),
-      );
+      if (previous) archived.push(previous);
+
+      this.database.db.transaction(() => {
+        this.database.setSetting("active_codex_thread_id", threadId);
+        this.database.setSetting("active_codex_thread_model", model);
+        this.database.setSetting(
+          "archived_codex_thread_ids",
+          JSON.stringify([...new Set(archived)].slice(-25)),
+        );
+        if (options.clearVisibleHistory) {
+          this.database.setSetting("conversation_started_at", clearedAt);
+          const lastSequence = this.database.db
+            .prepare(
+              "SELECT COALESCE(MAX(enqueue_sequence), 0) AS value FROM missions",
+            )
+            .get() as { value: number };
+          this.database.setSetting(
+            "conversation_started_after_sequence",
+            String(lastSequence.value),
+          );
+        } else if (!this.database.getSetting("conversation_started_at")) {
+          this.database.setSetting(
+            "conversation_started_at",
+            new Date(0).toISOString(),
+          );
+        }
+        this.database.setSetting("setup_completed", "true");
+        this.telemetry.resetContext(
+          clearedAt,
+          Boolean(options.clearVisibleHistory),
+        );
+        this.telemetry.append("conversation.context_cleared", {
+          previousThreadId: previous,
+          threadId,
+          visibleHistoryPreserved: !options.clearVisibleHistory,
+        });
+      })();
+
+      this.loadedThreadId = threadId;
+      this.conversationError = null;
+    } finally {
+      this.clearingContext = false;
+      queueMicrotask(() => void this.processNext());
     }
-    this.database.setSetting("active_codex_thread_id", "");
-    this.loadedThreadId = null;
-    this.conversationError = null;
-    await this.ensureConversationThread(true);
-    this.database.setSetting(
-      "conversation_started_at",
-      new Date().toISOString(),
-    );
-    this.database.setSetting("setup_completed", "true");
     return this.conversationStatus();
+  }
+
+  startFresh(): Promise<ReturnType<MissionsService["conversationStatus"]>> {
+    return this.clearContext({ clearVisibleHistory: true });
   }
 
   async retryConversation(): Promise<
@@ -198,16 +257,30 @@ export class MissionsService implements OnModuleInit {
 
   visibleTurns(): MissionRecord[] {
     const startedAt = this.database.getSetting("conversation_started_at");
+    const startedAfterSequence = numberSetting(
+      this.database.getSetting("conversation_started_after_sequence"),
+    );
     return this.repository
       .list()
-      .filter((turn) => !startedAt || turn.createdAt >= startedAt);
+      .filter((turn) =>
+        startedAfterSequence !== null
+          ? (turn.enqueueSequence ?? 0) > startedAfterSequence
+          : !startedAt || turn.createdAt >= startedAt,
+      );
   }
 
   turnPage(limit = 50, beforeSequence?: number): MissionRecord[] {
     const startedAt = this.database.getSetting("conversation_started_at");
+    const startedAfterSequence = numberSetting(
+      this.database.getSetting("conversation_started_after_sequence"),
+    );
     return this.repository
       .page(limit, beforeSequence)
-      .filter((turn) => !startedAt || turn.createdAt >= startedAt);
+      .filter((turn) =>
+        startedAfterSequence !== null
+          ? (turn.enqueueSequence ?? 0) > startedAfterSequence
+          : !startedAt || turn.createdAt >= startedAt,
+      );
   }
 
   queuePosition(id: string): number | null {
@@ -248,6 +321,11 @@ export class MissionsService implements OnModuleInit {
       attachmentIds?: string[];
     } = {},
   ): MissionRecord {
+    if (this.clearingContext) {
+      throw new ConflictException(
+        "Wait for context clearing to finish before sending another message",
+      );
+    }
     const status = this.codex.snapshot();
     const configured =
       this.database.getSetting("setup_completed") === "true" &&
@@ -306,11 +384,78 @@ export class MissionsService implements OnModuleInit {
       timerId,
       options,
     );
+    this.controlCode(mission.id);
     if (attachmentIds.length) {
       this.attachments.claimBrowserUploads(mission.id, attachmentIds);
     }
     void this.processNext();
     return mission;
+  }
+
+  controlCode(id: string): string {
+    this.get(id);
+    const existing = this.database.db
+      .prepare("SELECT code FROM turn_control_codes WHERE turn_id = ?")
+      .get(id) as { code: string } | undefined;
+    if (existing) return existing.code;
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      const bytes = randomBytes(8);
+      const code = [...bytes]
+        .map((byte) => alphabet[byte % alphabet.length])
+        .join("");
+      const result = this.database.db
+        .prepare(
+          `INSERT OR IGNORE INTO turn_control_codes(turn_id, code, created_at)
+           VALUES (?, ?, ?)`,
+        )
+        .run(id, code, new Date().toISOString());
+      if (result.changes === 1) return code;
+      const claimed = this.database.db
+        .prepare("SELECT code FROM turn_control_codes WHERE turn_id = ?")
+        .get(id) as { code: string } | undefined;
+      if (claimed) return claimed.code;
+    }
+    throw new Error("Could not allocate a unique turn control code");
+  }
+
+  findByControlCode(code: string): MissionRecord | null {
+    const row = this.database.db
+      .prepare(
+        `SELECT m.* FROM missions m
+         JOIN turn_control_codes c ON c.turn_id = m.id
+         WHERE c.code = ? COLLATE NOCASE LIMIT 1`,
+      )
+      .get(code) as { id: string } | undefined;
+    return row ? this.get(row.id) : null;
+  }
+
+  appendAuditEvent(id: string, kind: string, payload: unknown): void {
+    this.get(id);
+    this.repository.appendEvent(id, kind, payload);
+  }
+
+  latestPendingApproval(id: string): { requestId: string | number } | null {
+    const mission = this.get(id);
+    if (mission.status !== "awaiting_approval") return null;
+    const events = this.events(id);
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index]!;
+      if (event.kind === "approval.resolved") return null;
+      if (event.kind !== "approval.required") continue;
+      const payload =
+        event.payload && typeof event.payload === "object"
+          ? (event.payload as Record<string, unknown>)
+          : {};
+      if (
+        typeof payload.requestId === "string" ||
+        typeof payload.requestId === "number"
+      ) {
+        return { requestId: payload.requestId };
+      }
+      return null;
+    }
+    return null;
   }
 
   async compactConversation(): Promise<
@@ -424,6 +569,7 @@ export class MissionsService implements OnModuleInit {
       this.dispatching ||
       this.activeMissionId ||
       this.compacting ||
+      this.clearingContext ||
       this.dispatchPaused ||
       this.codex.snapshot().process !== "ready"
     )
@@ -1113,6 +1259,12 @@ function parseStringList(value: string | null): string[] {
   } catch {
     return [];
   }
+}
+
+function numberSetting(value: string | null): number | null {
+  if (value === null || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function recoveryAttemptsFor(mission: MissionRecord): number {

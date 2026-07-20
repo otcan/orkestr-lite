@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -14,7 +15,11 @@ import type { RuntimeConfig } from "../config/runtime-config.js";
 import { DatabaseService } from "../database/database.service.js";
 import { MissionEventBus } from "../missions/mission-event.bus.js";
 import { MissionRepository } from "../missions/mission.repository.js";
-import { WhatsAppService, splitWhatsAppText } from "./whatsapp.service.js";
+import {
+  parseWhatsAppCommand,
+  WhatsAppService,
+  splitWhatsAppText,
+} from "./whatsapp.service.js";
 import type {
   WhatsAppClient,
   WhatsAppClientFactory,
@@ -91,18 +96,91 @@ test("linked-device QR routes self messages into the shared conversation", async
       options: { ingressKey?: string; enqueueSequence?: number },
     ) => {
       createdInputs.push(input);
-      return repository.create(
+      const mission = repository.create(
         input,
         config.workspace,
         config.requestedModel,
         timerId,
         options,
       );
+      ensureControlCode(mission.id);
+      return mission;
     },
+    list: () => repository.list(),
     get: (id: string) => repository.require(id),
     events: (id: string) => repository.events(id),
     queuePosition: (id: string) => repository.queuePosition(id),
+    controlCode: (id: string) => ensureControlCode(id),
+    findByControlCode: (code: string) => {
+      const row = database.db
+        .prepare(
+          "SELECT turn_id FROM turn_control_codes WHERE code = ? COLLATE NOCASE",
+        )
+        .get(code) as { turn_id: string } | undefined;
+      return row ? repository.require(row.turn_id) : null;
+    },
+    appendAuditEvent: (id: string, kind: string, payload: unknown) =>
+      repository.appendEvent(id, kind, payload),
+    interrupt: async (id: string) => {
+      const mission = repository.require(id);
+      if (
+        !["queued", "starting", "running", "awaiting_approval"].includes(
+          mission.status,
+        )
+      ) {
+        throw new Error("Only active or queued work can be stopped");
+      }
+      const status = mission.status === "queued" ? "cancelled" : "interrupted";
+      return repository.update(id, {
+        status,
+        finishedAt: new Date().toISOString(),
+      });
+    },
+    latestPendingApproval: (id: string) => {
+      const mission = repository.require(id);
+      if (mission.status !== "awaiting_approval") return null;
+      const events = repository.events(id);
+      for (let index = events.length - 1; index >= 0; index -= 1) {
+        const event = events[index]!;
+        if (event.kind === "approval.resolved") return null;
+        if (event.kind !== "approval.required") continue;
+        const requestId = (event.payload as { requestId?: unknown }).requestId;
+        return typeof requestId === "string" || typeof requestId === "number"
+          ? { requestId }
+          : null;
+      }
+      return null;
+    },
+    approve: (
+      id: string,
+      input: { requestId: string | number; decision: string },
+    ) => {
+      const mission = repository.require(id);
+      if (mission.status !== "awaiting_approval") {
+        throw new Error("Mission is not awaiting approval");
+      }
+      repository.appendEvent(id, "approval.resolved", input);
+      return repository.update(id, { status: "running" });
+    },
   };
+  function ensureControlCode(id: string): string {
+    const existing = database.db
+      .prepare("SELECT code FROM turn_control_codes WHERE turn_id = ?")
+      .get(id) as { code: string } | undefined;
+    if (existing) return existing.code;
+    const count = (
+      database.db
+        .prepare("SELECT COUNT(*) AS count FROM turn_control_codes")
+        .get() as { count: number }
+    ).count;
+    const code = `TEST${String(count + 1).padStart(4, "0")}`;
+    database.db
+      .prepare(
+        "INSERT INTO turn_control_codes(turn_id, code, created_at) VALUES (?, ?, ?)",
+      )
+      .run(id, code, new Date().toISOString());
+    return code;
+  }
   const client = new FakeClient();
   const factory: WhatsAppClientFactory = async () => client;
   const service = new WhatsAppService(
@@ -133,7 +211,7 @@ test("linked-device QR routes self messages into the shared conversation", async
     writeFileSync(validFile, "result");
     await service.sendFileToSelf(validFile);
     await settle();
-    assert.equal(client.sentFiles[0]?.path, validFile);
+    assert.equal(client.sentFiles[0]?.path, realpathSync(validFile));
     const disallowedFile = join(home, "private.txt");
     writeFileSync(disallowedFile, "private");
     await assert.rejects(
@@ -155,7 +233,7 @@ test("linked-device QR routes self messages into the shared conversation", async
     ]);
     assert.equal(
       client.sent[0]?.text,
-      "Working · Your message is now with Codex",
+      "Working · TEST0001 · Your message is now with Codex\nReply status TEST0001 or stop TEST0001.",
     );
     assert.equal(client.sent[0]?.chatId, "123456789@lid");
 
@@ -171,6 +249,130 @@ test("linked-device QR routes self messages into the shared conversation", async
       prompt: "Check the tests",
       source: "whatsapp",
     });
+
+    client.emitMessage({
+      id: { _serialized: "control-status", remote: "123456789@lid" },
+      fromMe: true,
+      to: "123456789@lid",
+      body: "StAtUs test0001",
+    });
+    await settle();
+    assert.equal(createdInputs.length, 2, "commands must bypass batching");
+    assert.match(client.sent.at(-1)?.text || "", /^TEST0001 · Queued/);
+
+    client.emitMessage({
+      id: { _serialized: "control-stop", remote: "123456789@lid" },
+      fromMe: true,
+      to: "123456789@lid",
+      body: "stop TEST0001",
+    });
+    client.emitInboundMessage({
+      id: { _serialized: "control-stop", remote: "123456789@lid" },
+      fromMe: true,
+      to: "123456789@lid",
+      body: "stop TEST0001",
+    });
+    await settle();
+    assert.equal(client.sent.at(-1)?.text, "TEST0001 · Cancelled");
+    assert.equal(
+      repository
+        .events(
+          repository
+            .list()
+            .find(
+              (item) => item.id && ensureControlCode(item.id) === "TEST0001",
+            )!.id,
+        )
+        .filter((event) => event.kind === "whatsapp.control").length,
+      2,
+      "status and stop are audited once despite duplicate callbacks",
+    );
+
+    client.emitMessage({
+      id: { _serialized: "control-terminal", remote: "123456789@lid" },
+      fromMe: true,
+      to: "123456789@lid",
+      body: "stop TEST0001",
+    });
+    await settle();
+    assert.equal(
+      client.sent.at(-1)?.text,
+      "TEST0001 · Only active or queued work can be stopped",
+    );
+
+    client.emitMessage({
+      id: { _serialized: "control-unknown", remote: "123456789@lid" },
+      fromMe: true,
+      to: "123456789@lid",
+      body: "status DEADCODE",
+    });
+    await settle();
+    assert.equal(
+      client.sent.at(-1)?.text,
+      "Unknown control code DEADCODE. Send help for command syntax.",
+    );
+
+    const approvalMission = repository.create(
+      { source: "web", prompt: "Request an approval" },
+      config.workspace,
+      config.requestedModel,
+    );
+    const approvalCode = ensureControlCode(approvalMission.id);
+    repository.update(approvalMission.id, { status: "awaiting_approval" });
+    repository.appendEvent(approvalMission.id, "approval.required", {
+      requestId: "approval-1",
+    });
+    await settle();
+    client.emitMessage({
+      id: { _serialized: "control-approve", remote: "123456789@lid" },
+      fromMe: true,
+      to: "123456789@lid",
+      body: `approve ${approvalCode}`,
+    });
+    await settle();
+    assert.equal(
+      client.sent.at(-1)?.text,
+      `${approvalCode} · Approval accepted. Working.`,
+    );
+    assert.equal(repository.require(approvalMission.id).status, "running");
+
+    client.emitMessage({
+      id: {
+        _serialized: "control-already-resolved",
+        remote: "123456789@lid",
+      },
+      fromMe: true,
+      to: "123456789@lid",
+      body: `approve ${approvalCode}`,
+    });
+    await settle();
+    assert.equal(
+      client.sent.at(-1)?.text,
+      `${approvalCode} · ${approvalCode} has no pending approval request`,
+    );
+
+    const declineMission = repository.create(
+      { source: "web", prompt: "Decline an approval" },
+      config.workspace,
+      config.requestedModel,
+    );
+    const declineCode = ensureControlCode(declineMission.id);
+    repository.update(declineMission.id, { status: "awaiting_approval" });
+    repository.appendEvent(declineMission.id, "approval.required", {
+      requestId: "approval-2",
+    });
+    await settle();
+    client.emitMessage({
+      id: { _serialized: "control-decline", remote: "123456789@lid" },
+      fromMe: true,
+      to: "123456789@lid",
+      body: `decline ${declineCode}`,
+    });
+    await settle();
+    assert.equal(
+      client.sent.at(-1)?.text,
+      `${declineCode} · Approval declined. Working.`,
+    );
 
     client.emitInboundMessage({
       id: { _serialized: "external-1", remote: "49111111111@c.us" },
@@ -222,7 +424,7 @@ test("linked-device QR routes self messages into the shared conversation", async
       id: { _serialized: "echo-1", remote: "46700000000@c.us" },
       fromMe: true,
       to: "46700000000@c.us",
-      body: "Working · Your message is now with Codex",
+      body: client.sent[0]?.text,
     });
     await settle();
     assert.equal(
@@ -234,7 +436,7 @@ test("linked-device QR routes self messages into the shared conversation", async
       (
         database.db
           .prepare(
-            "SELECT status FROM whatsapp_outbox WHERE body = 'Working · Your message is now with Codex' ORDER BY created_at LIMIT 1",
+            "SELECT status FROM whatsapp_outbox WHERE body LIKE 'Working · TEST0001%' ORDER BY created_at LIMIT 1",
           )
           .get() as { status: string }
       ).status,
@@ -277,6 +479,21 @@ test("linked-device QR routes self messages into the shared conversation", async
     database.onModuleDestroy();
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test("WhatsApp controls require exact whole-message commands", () => {
+  assert.deepEqual(parseWhatsAppCommand(" status "), {
+    action: "status",
+    code: null,
+  });
+  assert.deepEqual(parseWhatsAppCommand("ApPrOvE abcd1234"), {
+    action: "approve",
+    code: "ABCD1234",
+  });
+  assert.deepEqual(parseWhatsAppCommand("HELP"), { action: "help" });
+  assert.equal(parseWhatsAppCommand("please stop ABCD1234"), null);
+  assert.equal(parseWhatsAppCommand("status ABC"), null);
+  assert.equal(parseWhatsAppCommand("help me with this"), null);
 });
 
 test("long WhatsApp results are split below the message limit", () => {

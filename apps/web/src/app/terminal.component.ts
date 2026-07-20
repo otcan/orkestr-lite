@@ -26,15 +26,35 @@ interface TerminalSession {
           {{ connected() ? "Connected" : status() }}
         </span>
         <div>
-          <button type="button" class="quiet terminal-button" (click)="copy()">Copy</button>
-          <button type="button" class="quiet terminal-button" (click)="paste()">Paste</button>
+          <button type="button" class="quiet terminal-button" (click)="copy()">
+            Copy
+          </button>
+          <button type="button" class="quiet terminal-button" (click)="paste()">
+            Paste
+          </button>
           @if (!connected()) {
-            <button type="button" class="quiet terminal-button" (click)="reconnect()">Reconnect</button>
+            <button
+              type="button"
+              class="quiet terminal-button"
+              (click)="reconnect()"
+            >
+              Reconnect
+            </button>
           }
-          <button type="button" class="quiet terminal-button" (click)="restart()">Restart</button>
+          <button
+            type="button"
+            class="quiet terminal-button"
+            (click)="restart()"
+          >
+            Restart
+          </button>
         </div>
       </div>
-      <div #terminalHost class="terminal-host" aria-label="Workspace terminal"></div>
+      <div
+        #terminalHost
+        class="terminal-host"
+        aria-label="Workspace terminal"
+      ></div>
       @if (error()) {
         <p class="terminal-error">{{ error() }}</p>
       }
@@ -42,7 +62,8 @@ interface TerminalSession {
   `,
 })
 export class TerminalComponent implements AfterViewInit, OnDestroy {
-  @ViewChild("terminalHost", { static: true }) host!: ElementRef<HTMLDivElement>;
+  @ViewChild("terminalHost", { static: true })
+  host!: ElementRef<HTMLDivElement>;
   readonly connected = signal(false);
   readonly status = signal("Connecting…");
   readonly error = signal("");
@@ -149,9 +170,13 @@ export class TerminalComponent implements AfterViewInit, OnDestroy {
     socket.onmessage = (event) => {
       const message = JSON.parse(String(event.data)) as Record<string, unknown>;
       if (message.type === "ready") {
-        const scrollback = typeof message.scrollback === "string" ? message.scrollback : "";
+        const scrollback =
+          typeof message.scrollback === "string" ? message.scrollback : "";
         if (scrollback) this.terminal?.write(scrollback);
-      } else if (message.type === "output" && typeof message.data === "string") {
+      } else if (
+        message.type === "output" &&
+        typeof message.data === "string"
+      ) {
         this.terminal?.write(message.data);
       } else if (message.type === "exit") {
         this.connected.set(false);

@@ -1,50 +1,25 @@
-# Orkestr Lite submission media
+# v0.2 submission media
 
-This file tracks the Build Week media package and keeps authentic product evidence separate from illustrative artwork.
+All product captures must come from the compiled v0.2 product and the authentic
+research run. Sanitize administrator passwords, device codes, QR codes, account
+email, phone number, personal inbox data, tokens, and unrelated workspace files.
 
-## Prepared assets
+Required captures under `assets/submission/v0.2/`:
 
-| Asset                                         | Use                           | Disclosure and caption                                                                                                                                                                                                                                               |
-| --------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `assets/submission/devpost-thumbnail.png`     | Devpost 3:2 gallery thumbnail | AI-generated campaign artwork. It represents the persistent mission flow and is not a product screenshot. Alt text: “Orkestr Lite title beside a dark browser workstation showing a three-stage mission flow from intent through code activity to a completed diff.” |
-| `assets/submission/setup-ready.png`           | Product gallery               | Authentic capture of the compiled Orkestr Lite setup screen using the deterministic app-server fixture. Caption: “Codex connection and GPT-5.6-family readiness are verified before a mission can start.”                                                            |
-| `assets/submission/mission-complete.png`      | Product gallery               | Authentic capture of the compiled mission detail screen using the deterministic app-server fixture. Caption: “A completed mission preserves structured activity, model provenance, workspace diff, and the final response.”                                          |
-| `assets/submission/live-mission-complete.png` | Live acceptance evidence      | Sanitized authentic capture of mission `8f23b759-7741-4c19-a1c8-b7936de567e3` using the host's ChatGPT-authenticated account. Caption: “The live Build Week mission completed with `gpt-5.6-sol` recorded as both requested and effective model.”                    |
+| File                  | Authentic content                                                                 |
+| --------------------- | --------------------------------------------------------------------------------- |
+| `setup.png`           | Workstation setup with Codex connected and sensitive identity removed             |
+| `chat.png`            | One conversation, GPT-5.6/effort/YOLO toolbar, research activity and control code |
+| `desk-report.png`     | Generated HTML research report open in the real Ubuntu Desk browser               |
+| `files.png`           | Whole-container Files view showing the two report artifacts                       |
+| `timers.png`          | Weekly watch, schedule preview, and completed Run-now state                       |
+| `whatsapp.png`        | Sanitized linked self-chat follow-up and returned Markdown document               |
+| `report-complete.png` | Completed cited report response and GPT-5.6 provenance                            |
 
-The fixture screenshots demonstrate the tested product interface. The separate
-live capture records the authenticated ORK-373 acceptance run without exposing
-the account email or credentials.
+`hero-montage.png` may be assembled only from those sanitized authentic
+captures. Do not use generated UI, mock data, the deterministic clamp fixture,
+or an old mission-centric screenshot in the v0.2 montage.
 
-Regenerate the authentic screenshots after any intentional interface change:
-
-```bash
-npm run media:capture
-```
-
-## Final video package
-
-Follow [the demo runbook](../DEMO.md) and target 2:40–2:50. The final public YouTube upload must:
-
-- show the live authenticated GPT-5.6 mission, workspace change, and three passing tests;
-- include continuous English narration explaining the product, Codex build workflow, and GPT-5.6 runtime role;
-- include accurate English captions;
-- show recovery behavior without exposing credentials or private account details;
-- contain no unlicensed music, marks, or other third-party material;
-- remain publicly visible and embeddable through judging; and
-- be checked in a signed-out browser before submission.
-
-## Capture safety
-
-- Use a disposable workspace and the bounded prompt from the runbook.
-- Hide passwords, device codes, email addresses, tokens, Codex home contents, and private logs.
-- Record at a readable browser zoom and at least 1080p.
-- Keep the cursor still when a screen is being explained.
-- Cut waiting time transparently; preserve chronological order.
-- Discard any take that exposes a credential or personal account detail.
-
-## Remaining owner inputs
-
-- narration recording or approval of an AI-assisted English voiceover;
-- YouTube account access and final public URL;
-- captions reviewed against the final audio; and
-- signed-out confirmation that the video and all gallery assets load.
+The video must disclose visible jump cuts for live research latency, show the
+official source URLs, and keep chronological execution truthful. Re-record any
+take that exposes a credential or private WhatsApp content.

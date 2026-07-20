@@ -5,10 +5,13 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { rmSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { WebSocket, WebSocketServer } from "ws";
+import {
+  chromiumProfileProcessRunning,
+  recoverStaleChromiumProfile,
+} from "./chromium-profile.js";
 
 const host = process.env.ORKESTR_DESK_HOST ?? "0.0.0.0";
 const port = Number(process.env.ORKESTR_DESK_PORT ?? "3100");
@@ -19,7 +22,9 @@ const codexHome = process.env.CODEX_HOME ?? "/codex";
 const deskHome = process.env.HOME ?? "/home/orkestr";
 const display = process.env.DISPLAY ?? ":1";
 const expectedCodexVersion = process.env.ORKESTR_CODEX_VERSION ?? "0.144.5";
-const browserCommand = process.env.ORKESTR_DESK_BROWSER ?? "chromium";
+const browserCommand = process.env.ORKESTR_DESK_BROWSER ?? "/usr/bin/chromium";
+const browserProfile = `${deskHome}/.config/chromium`;
+const browserLauncher = "/usr/local/bin/xdg-open";
 
 let secret = "";
 let desktopProcesses: ChildProcess[] = [];
@@ -44,6 +49,7 @@ const server = createServer(
 async function main(): Promise<void> {
   secret = (await readFile(tokenFile, "utf8")).trim();
   if (!secret) throw new Error("Desk authentication token is empty");
+  recoverChromiumProfile("startup");
   startDesktop();
   websocketServer.on("connection", (socket) => connectCodex(socket));
   server.on("upgrade", (request, socket, head) => {
@@ -94,7 +100,7 @@ async function handleHttp(
     return;
   }
   if (url.pathname === "/actions/open-browser") {
-    openBrowser();
+    openBrowser(browserTarget(url.searchParams.get("url")));
     json(response, 202, { accepted: true });
     return;
   }
@@ -113,7 +119,12 @@ async function handleHttp(
 
 function startDesktop(): void {
   const generation = ++desktopGeneration;
-  const environment = { ...process.env, DISPLAY: display, HOME: deskHome };
+  const environment = {
+    ...process.env,
+    DISPLAY: display,
+    HOME: deskHome,
+    BROWSER: browserLauncher,
+  };
   desktopProcesses = [
     managed(
       "Xtigervnc",
@@ -176,38 +187,49 @@ function managed(
   return child;
 }
 
-function openBrowser(): void {
-  const profile = `${deskHome}/.config/google-chrome`;
+function openBrowser(target = "about:blank"): void {
   const existing = desktopProcesses.find(
     (process) =>
       process.spawnargs[0]?.includes(browserCommand) &&
       process.exitCode === null,
   );
-  const profileProcess = spawnSync("pgrep", [
-    "-f",
-    `chromium.*--user-data-dir=${profile}`,
-  ]);
-  if (existing || profileProcess.status === 0) return;
-  for (const singleton of [
-    "SingletonCookie",
-    "SingletonLock",
-    "SingletonSocket",
-  ])
-    rmSync(`${profile}/${singleton}`, { force: true });
+  if (existing || chromiumProfileProcessRunning(browserProfile)) {
+    desktopProcesses.push(
+      managed(browserCommand, browserArguments(target), browserEnvironment()),
+    );
+    return;
+  }
+  recoverChromiumProfile("open");
   desktopProcesses.push(
-    managed(
-      browserCommand,
-      [
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        `--user-data-dir=${profile}`,
-        "--remote-debugging-address=127.0.0.1",
-        "--remote-debugging-port=9222",
-        "about:blank",
-      ],
-      { ...process.env, DISPLAY: display, HOME: deskHome },
-    ),
+    managed(browserCommand, browserArguments(target), browserEnvironment()),
   );
+}
+
+function browserArguments(target: string): string[] {
+  return [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    `--user-data-dir=${browserProfile}`,
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=9222",
+    target,
+  ];
+}
+
+function browserEnvironment(): NodeJS.ProcessEnv {
+  return { ...process.env, DISPLAY: display, HOME: deskHome };
+}
+
+function browserTarget(value: string | null): string {
+  if (!value) return "about:blank";
+  try {
+    const target = new URL(value);
+    return ["http:", "https:", "file:"].includes(target.protocol)
+      ? target.toString()
+      : "about:blank";
+  } catch {
+    return "about:blank";
+  }
 }
 
 async function restartDesktop(reset: boolean): Promise<void> {
@@ -223,6 +245,7 @@ async function restartDesktop(reset: boolean): Promise<void> {
   desktopProcesses = [];
   if (reset) {
     await Promise.all([
+      rm(`${deskHome}/.config/chromium`, { recursive: true, force: true }),
       rm(`${deskHome}/.config/google-chrome`, { recursive: true, force: true }),
       rm(`${deskHome}/.cache`, { recursive: true, force: true }),
       rm(`${deskHome}/.config/xfce4`, { recursive: true, force: true }),
@@ -241,7 +264,7 @@ function connectCodex(socket: WebSocket): void {
       CODEX_HOME: codexHome,
       HOME: deskHome,
       DISPLAY: display,
-      BROWSER: browserCommand,
+      BROWSER: browserLauncher,
       XDG_CURRENT_DESKTOP: "XFCE",
       DESKTOP_SESSION: "xfce",
     },
@@ -280,6 +303,19 @@ function connectCodex(socket: WebSocket): void {
     send(socket, { type: "stderr", line: error.message });
     close();
   });
+}
+
+function recoverChromiumProfile(context: "open" | "startup"): void {
+  const recovery = recoverStaleChromiumProfile(browserProfile);
+  if (recovery.reason === "stale") {
+    process.stdout.write(
+      `[chromium] Removed stale profile singleton links during ${context}: ${recovery.removed.join(", ")}\n`,
+    );
+  } else if (recovery.reason === "ambiguous") {
+    process.stderr.write(
+      `[chromium] Profile singleton state is ambiguous during ${context}; preserving it\n`,
+    );
+  }
 }
 
 function stopCodex(): void {

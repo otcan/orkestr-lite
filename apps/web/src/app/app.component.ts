@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from "@angular/core";
+import { Component, HostListener, OnInit, signal } from "@angular/core";
 import {
   Router,
   RouterLink,
@@ -37,21 +37,125 @@ import { LoginComponent } from "./login.component";
             <a routerLink="/timers" routerLinkActive="active">Timers</a>
             <a routerLink="/settings" routerLinkActive="active">Settings</a>
           </nav>
-          <button class="quiet" type="button" (click)="logout()">
+          <button
+            class="quiet desktop-signout"
+            type="button"
+            (click)="logout()"
+          >
             Sign out
+          </button>
+          <button
+            class="quiet mobile-menu-toggle"
+            type="button"
+            aria-controls="mobile-navigation"
+            [attr.aria-expanded]="mobileMenuOpen()"
+            (click)="mobileMenuOpen.set(true)"
+          >
+            <span class="mobile-menu-icon" aria-hidden="true"></span>
+            Menu
           </button>
         </header>
         <router-outlet />
-        <nav class="mobile-nav" aria-label="Mobile navigation">
-          <a routerLink="/chat">Chat</a>
-          @if (deskEnabled()) {
-            <a routerLink="/desk">Desk</a>
-          }
-          <a routerLink="/files">Files</a>
-          <a routerLink="/terminal">Terminal</a>
-          <a routerLink="/timers">Timers</a>
-          <a routerLink="/settings">Settings</a>
-        </nav>
+        @if (mobileMenuOpen()) {
+          <div class="mobile-menu-backdrop" (click)="closeMobileMenu()">
+            <nav
+              id="mobile-navigation"
+              class="mobile-menu-panel"
+              aria-label="Mobile navigation"
+              (click)="$event.stopPropagation()"
+            >
+              <header>
+                <div>
+                  <p class="eyebrow">Workstation</p>
+                  <strong>Navigate Orkestr</strong>
+                </div>
+                <button
+                  class="quiet mobile-menu-close"
+                  type="button"
+                  aria-label="Close navigation menu"
+                  (click)="closeMobileMenu()"
+                >
+                  ×
+                </button>
+              </header>
+              <div class="mobile-menu-links">
+                <a
+                  routerLink="/chat"
+                  routerLinkActive="active"
+                  (click)="closeMobileMenu()"
+                >
+                  <span class="mobile-menu-glyph">C</span>
+                  <span
+                    ><strong>Chat</strong
+                    ><small>Codex conversation</small></span
+                  >
+                </a>
+                @if (deskEnabled()) {
+                  <a
+                    routerLink="/desk"
+                    routerLinkActive="active"
+                    (click)="closeMobileMenu()"
+                  >
+                    <span class="mobile-menu-glyph">D</span>
+                    <span
+                      ><strong>Desk</strong
+                      ><small>Ubuntu workspace</small></span
+                    >
+                  </a>
+                }
+                <a
+                  routerLink="/files"
+                  routerLinkActive="active"
+                  (click)="closeMobileMenu()"
+                >
+                  <span class="mobile-menu-glyph">F</span>
+                  <span
+                    ><strong>Files</strong><small>Browse the box</small></span
+                  >
+                </a>
+                <a
+                  routerLink="/terminal"
+                  routerLinkActive="active"
+                  (click)="closeMobileMenu()"
+                >
+                  <span class="mobile-menu-glyph">T</span>
+                  <span
+                    ><strong>Terminal</strong
+                    ><small>Interactive shell</small></span
+                  >
+                </a>
+                <a
+                  routerLink="/timers"
+                  routerLinkActive="active"
+                  (click)="closeMobileMenu()"
+                >
+                  <span class="mobile-menu-glyph">S</span>
+                  <span
+                    ><strong>Timers</strong><small>Scheduled work</small></span
+                  >
+                </a>
+                <a
+                  routerLink="/settings"
+                  routerLinkActive="active"
+                  (click)="closeMobileMenu()"
+                >
+                  <span class="mobile-menu-glyph">⚙</span>
+                  <span
+                    ><strong>Settings</strong
+                    ><small>Connections and context</small></span
+                  >
+                </a>
+              </div>
+              <button
+                class="quiet mobile-menu-signout"
+                type="button"
+                (click)="logout()"
+              >
+                Sign out
+              </button>
+            </nav>
+          </div>
+        }
       </div>
     }
   `,
@@ -60,6 +164,7 @@ export class AppComponent implements OnInit {
   readonly checkingSession = signal(true);
   readonly authenticated = signal(false);
   readonly deskEnabled = signal(false);
+  readonly mobileMenuOpen = signal(false);
 
   constructor(
     private readonly api: ApiService,
@@ -86,8 +191,23 @@ export class AppComponent implements OnInit {
   }
 
   async logout(): Promise<void> {
+    this.mobileMenuOpen.set(false);
     await this.api.logout();
     this.authenticated.set(false);
+  }
+
+  closeMobileMenu(): void {
+    this.mobileMenuOpen.set(false);
+  }
+
+  @HostListener("document:keydown.escape")
+  closeMobileMenuWithEscape(): void {
+    this.closeMobileMenu();
+  }
+
+  @HostListener("window:resize")
+  closeMobileMenuAboveBreakpoint(): void {
+    if (globalThis.innerWidth > 840) this.closeMobileMenu();
   }
 
   private async openFirstRunSetup(): Promise<void> {

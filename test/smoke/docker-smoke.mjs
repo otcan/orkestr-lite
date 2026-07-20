@@ -12,6 +12,10 @@ const container = `orkestr-lite-smoke-${suffix}`;
 const dataVolume = `orkestr-lite-smoke-data-${suffix}`;
 const workspaceVolume = `orkestr-lite-smoke-workspace-${suffix}`;
 const password = `smoke-${suffix}`;
+let cleanupPromise;
+
+installSignalCleanup("SIGINT", 130);
+installSignalCleanup("SIGTERM", 143);
 
 try {
   if (suppliedImage) {
@@ -29,12 +33,10 @@ try {
     "--detach",
     "--name",
     container,
+    "--label",
+    "dev.orkestr-lite.ephemeral=true",
     "--publish",
     "127.0.0.1::3000",
-    "--cap-drop",
-    "ALL",
-    "--security-opt",
-    "no-new-privileges:true",
     "--env",
     `ORKESTR_ADMIN_PASSWORD=${password}`,
     "--mount",
@@ -60,7 +62,23 @@ try {
     ])
   ).stdout;
   assert.match(processSecurity, /CapEff:\s+0{16}/);
-  assert.match(processSecurity, /NoNewPrivs:\s+1/);
+  assert.match(processSecurity, /NoNewPrivs:\s+0/);
+  assert.equal(
+    (
+      await run("docker", ["exec", container, "sudo", "-n", "id", "-u"])
+    ).stdout.trim(),
+    "0",
+  );
+  await run("docker", ["exec", container, "byobu", "--version"]);
+  await run("docker", [
+    "exec",
+    container,
+    "sudo",
+    "-n",
+    "test",
+    "-w",
+    "/var/lib/dpkg",
+  ]);
   await assertLogin(port);
 
   const firstCommit = (
@@ -91,10 +109,11 @@ try {
       "%a",
       "/data",
       "/data/codex",
+      "/codex",
       "/data/orkestr.sqlite",
     ])
   ).stdout.trim();
-  assert.equal(privateModes, "700\n700\n600");
+  assert.equal(privateModes, "700\n700\n700\n600");
 
   const demoTest = await run(
     "docker",
@@ -139,7 +158,7 @@ try {
 
   console.log("Docker smoke test passed");
 } finally {
-  await cleanup();
+  await cleanupOnce();
 }
 
 async function assertLogin(port) {
@@ -205,6 +224,18 @@ async function cleanup() {
   if (!suppliedImage) {
     await run("docker", ["image", "rm", image], { allowFailure: true });
   }
+}
+
+function cleanupOnce() {
+  cleanupPromise ??= cleanup();
+  return cleanupPromise;
+}
+
+function installSignalCleanup(signal, exitCode) {
+  process.once(signal, () => {
+    console.error(`Received ${signal}; removing Docker smoke artifacts.`);
+    void cleanupOnce().finally(() => process.exit(exitCode));
+  });
 }
 
 async function run(command, args, options = {}) {

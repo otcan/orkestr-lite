@@ -1,15 +1,11 @@
 services:
   orkestr:
-    image: "${ORKESTR_IMAGE:-ghcr.io/otcan/orkestr-lite:v0.1.0-build-week}"
+    image: "${ORKESTR_IMAGE:-ghcr.io/otcan/orkestr-lite:v0.2.0-build-week}"
     build:
       context: .
       target: final
     ports:
-      - "127.0.0.1:3000:3000"
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+      - "127.0.0.1:${ORKESTR_HOST_PORT:-3000}:3000"
     volumes:
       - orkestr-data:/data
       - orkestr-workspace:/workspace
@@ -34,15 +30,11 @@ services:
 
   orkestr-desk:
     profiles: ["desk"]
-    image: "${ORKESTR_DESK_IMAGE:-orkestr-lite-desk:local}"
+    image: "${ORKESTR_DESK_IMAGE:-ghcr.io/otcan/orkestr-lite:v0.2.0-build-week-desk}"
     platform: linux/amd64
     build:
       context: .
       target: desk-runtime
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
     shm_size: "1gb"
     volumes:
       - orkestr-workspace:/workspace
@@ -53,6 +45,7 @@ services:
       CODEX_HOME: /codex
       ORKESTR_WORKSPACE: /workspace
       ORKESTR_CODEX_VERSION: 0.144.5
+      ORKESTR_DESK_BROWSER: /usr/bin/chromium
       ORKESTR_DESK_TOKEN_FILE: /run/orkestr-desk-auth/token
     restart: unless-stopped
 

@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p "${ORKESTR_HOME:-/data}" "${CODEX_HOME:-/codex}" "${ORKESTR_WORKSPACE:-/workspace}"
-
-legacy_codex_home="${ORKESTR_HOME:-/data}/codex"
+orkestr_home="${ORKESTR_HOME:-/data}"
 active_codex_home="${CODEX_HOME:-/codex}"
+workspace_home="${ORKESTR_WORKSPACE:-/workspace}"
+legacy_codex_home="${orkestr_home}/codex"
 legacy_merge_marker="${active_codex_home}/.orkestr-legacy-merge-v1"
+
+mkdir -p \
+  "${orkestr_home}" \
+  "${legacy_codex_home}" \
+  "${active_codex_home}" \
+  "${workspace_home}"
+chmod 0700 "${orkestr_home}" "${legacy_codex_home}" "${active_codex_home}"
 
 if [[ "${active_codex_home}" != "${legacy_codex_home}" \
   && -d "${legacy_codex_home}" \
@@ -17,14 +24,14 @@ if [[ "${active_codex_home}" != "${legacy_codex_home}" \
   touch "${legacy_merge_marker}"
 fi
 
-if [[ -z "$(find "${ORKESTR_WORKSPACE:-/workspace}" -mindepth 1 -maxdepth 1 ! -name .gitkeep -print -quit)" ]]; then
-  rm -f "${ORKESTR_WORKSPACE:-/workspace}/.gitkeep"
-  cp -a /opt/orkestr-demo/. "${ORKESTR_WORKSPACE:-/workspace}/"
-  git -C "${ORKESTR_WORKSPACE:-/workspace}" init -b main >/dev/null
-  git -C "${ORKESTR_WORKSPACE:-/workspace}" config user.name "Orkestr Demo"
-  git -C "${ORKESTR_WORKSPACE:-/workspace}" config user.email "demo@orkestr.local"
-  git -C "${ORKESTR_WORKSPACE:-/workspace}" add .
-  git -C "${ORKESTR_WORKSPACE:-/workspace}" commit -m "chore: seed deterministic demo" >/dev/null
+if [[ -z "$(find "${workspace_home}" -mindepth 1 -maxdepth 1 ! -name .gitkeep -print -quit)" ]]; then
+  rm -f "${workspace_home}/.gitkeep"
+  cp -a /opt/orkestr-demo/. "${workspace_home}/"
+  git -C "${workspace_home}" init -b main >/dev/null
+  git -C "${workspace_home}" config user.name "Orkestr Demo"
+  git -C "${workspace_home}" config user.email "demo@orkestr.local"
+  git -C "${workspace_home}" add .
+  git -C "${workspace_home}" commit -m "chore: seed deterministic demo" >/dev/null
 fi
 
 exec node /app/dist/server/main.js

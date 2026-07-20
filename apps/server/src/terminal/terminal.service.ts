@@ -32,10 +32,15 @@ interface ActiveTerminal {
 @Injectable()
 export class TerminalService implements OnModuleInit, OnModuleDestroy {
   private active: ActiveTerminal | null = null;
-  private readonly tokens = new Map<string, { sessionId: string; expiresAt: number }>();
+  private readonly tokens = new Map<
+    string,
+    { sessionId: string; expiresAt: number }
+  >();
   private readonly tokenRequests: number[] = [];
   private websocketServer: WebSocketServer | null = null;
-  private upgradeListener: ((request: IncomingMessage, socket: Duplex, head: Buffer) => void) | null = null;
+  private upgradeListener:
+    | ((request: IncomingMessage, socket: Duplex, head: Buffer) => void)
+    | null = null;
   private httpServer: Server | null = null;
 
   constructor(
@@ -114,7 +119,9 @@ export class TerminalService implements OnModuleInit, OnModuleDestroy {
 
   private spawn(): void {
     const id = randomUUID();
-    const shell = process.env.SHELL?.endsWith("bash") ? process.env.SHELL : "/bin/bash";
+    const shell = process.env.SHELL?.endsWith("bash")
+      ? process.env.SHELL
+      : "/bin/bash";
     const terminalProcess = pty.spawn(shell, ["--noprofile", "--norc"], {
       name: "xterm-256color",
       cols: 100,
@@ -144,7 +151,9 @@ export class TerminalService implements OnModuleInit, OnModuleDestroy {
     this.audit(id, "started", { cwd: this.config.workspace });
     terminalProcess.onData((data) => {
       if (this.active !== session) return;
-      session.scrollback = `${session.scrollback}${data}`.slice(-MAX_SCROLLBACK);
+      session.scrollback = `${session.scrollback}${data}`.slice(
+        -MAX_SCROLLBACK,
+      );
       this.touch(id);
       this.broadcast(session, { type: "output", data });
     });
@@ -193,7 +202,9 @@ export class TerminalService implements OnModuleInit, OnModuleDestroy {
           this.audit(id, "resize", { cols, rows });
         }
       } catch {
-        socket.send(JSON.stringify({ type: "error", message: "Invalid terminal frame" }));
+        socket.send(
+          JSON.stringify({ type: "error", message: "Invalid terminal frame" }),
+        );
       }
     });
     socket.on("close", () => {
@@ -272,7 +283,12 @@ export class TerminalService implements OnModuleInit, OnModuleDestroy {
       .prepare(
         "INSERT INTO terminal_events(session_id, event_type, metadata_json, created_at) VALUES (?, ?, ?, ?)",
       )
-      .run(sessionId, eventType, JSON.stringify(metadata), new Date().toISOString());
+      .run(
+        sessionId,
+        eventType,
+        JSON.stringify(metadata),
+        new Date().toISOString(),
+      );
   }
 
   private pruneTokens(): void {
