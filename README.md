@@ -283,6 +283,22 @@ npm run test:docker
 npm run check:release
 ```
 
+Docker smoke tests clean up their temporary containers, volumes, and locally
+built images on success, failure, `SIGINT`, or `SIGTERM`. If a host interruption
+still leaves a stopped test container behind, run:
+
+```bash
+npm run docker:cleanup
+```
+
+That command removes only stopped Orkestr smoke containers. To remove every
+stopped container on the Docker host while preserving running containers,
+images, and named volumes, use the deliberately explicit global command:
+
+```bash
+npm run docker:cleanup:all
+```
+
 The immutable release publishes a paired Linux AMD64 runtime:
 
 - control: `ghcr.io/otcan/orkestr-lite:v0.2.0-build-week`

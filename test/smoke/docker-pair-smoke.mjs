@@ -23,6 +23,10 @@ const environment = {
   ORKESTR_ADMIN_PASSWORD: password,
   ORKESTR_HOST_PORT: process.env.ORKESTR_SMOKE_HOST_PORT?.trim() || "0",
 };
+let cleanupPromise;
+
+installSignalCleanup("SIGINT", 130);
+installSignalCleanup("SIGTERM", 143);
 
 try {
   if (process.env.ORKESTR_SMOKE_SKIP_PULL !== "true") {
@@ -139,7 +143,21 @@ try {
   await waitForBrowserUrl(desk, "file:///workspace/.pair-smoke.html");
   console.log("Published control + Desk smoke test passed");
 } finally {
-  await compose(["down", "--volumes", "--remove-orphans"], true);
+  await cleanupOnce();
+}
+
+function cleanupOnce() {
+  cleanupPromise ??= compose(["down", "--volumes", "--remove-orphans"], true);
+  return cleanupPromise;
+}
+
+function installSignalCleanup(signal, exitCode) {
+  process.once(signal, () => {
+    console.error(
+      `Received ${signal}; removing paired Docker smoke artifacts.`,
+    );
+    void cleanupOnce().finally(() => process.exit(exitCode));
+  });
 }
 
 async function loginAt(port) {

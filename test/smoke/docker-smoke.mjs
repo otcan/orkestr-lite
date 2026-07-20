@@ -12,6 +12,10 @@ const container = `orkestr-lite-smoke-${suffix}`;
 const dataVolume = `orkestr-lite-smoke-data-${suffix}`;
 const workspaceVolume = `orkestr-lite-smoke-workspace-${suffix}`;
 const password = `smoke-${suffix}`;
+let cleanupPromise;
+
+installSignalCleanup("SIGINT", 130);
+installSignalCleanup("SIGTERM", 143);
 
 try {
   if (suppliedImage) {
@@ -29,6 +33,8 @@ try {
     "--detach",
     "--name",
     container,
+    "--label",
+    "dev.orkestr-lite.ephemeral=true",
     "--publish",
     "127.0.0.1::3000",
     "--env",
@@ -103,10 +109,11 @@ try {
       "%a",
       "/data",
       "/data/codex",
+      "/codex",
       "/data/orkestr.sqlite",
     ])
   ).stdout.trim();
-  assert.equal(privateModes, "700\n700\n600");
+  assert.equal(privateModes, "700\n700\n700\n600");
 
   const demoTest = await run(
     "docker",
@@ -151,7 +158,7 @@ try {
 
   console.log("Docker smoke test passed");
 } finally {
-  await cleanup();
+  await cleanupOnce();
 }
 
 async function assertLogin(port) {
@@ -217,6 +224,18 @@ async function cleanup() {
   if (!suppliedImage) {
     await run("docker", ["image", "rm", image], { allowFailure: true });
   }
+}
+
+function cleanupOnce() {
+  cleanupPromise ??= cleanup();
+  return cleanupPromise;
+}
+
+function installSignalCleanup(signal, exitCode) {
+  process.once(signal, () => {
+    console.error(`Received ${signal}; removing Docker smoke artifacts.`);
+    void cleanupOnce().finally(() => process.exit(exitCode));
+  });
 }
 
 async function run(command, args, options = {}) {
