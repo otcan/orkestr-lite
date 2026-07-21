@@ -103,9 +103,10 @@ npm run demo:capture
 ```
 
 Visually inspect all seven screenshots. Never use the crop example without
-checking the actual phone capture. The public screenshot walkthrough is the
-single static [`demo.html`](../demo.html) file. It uses those captures directly
-and has no generated montage or video.
+checking the actual phone capture. The public screenshot walkthrough is
+[hosted on GitHub Pages](https://otcan.github.io/orkestr-lite/) from the single
+static [`demo.html`](../demo.html) file. It uses those captures directly and has
+no generated montage or video.
 
 Record the public video manually in Loom against the real product. Follow the
 [Loom script](competition/NARRATION.md), keep the finished video below three
