@@ -72,6 +72,8 @@ test("live acceptance waits for current Codex and WhatsApp readiness", async () 
   assert.match(runner, /request\("\/api\/setup\/status"\)/);
   assert.match(runner, /request\("\/api\/setup\/whatsapp\/status"\)/);
   assert.match(runner, /latest\.ready && whatsapp\.ready/);
+  assert.match(runner, /waitForWhatsAppAttachmentAcknowledgement/);
+  assert.match(runner, /includeAcknowledged=true/);
   assert.doesNotMatch(runner, /firstMissionReady/);
 });
 

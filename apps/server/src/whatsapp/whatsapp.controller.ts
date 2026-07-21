@@ -84,8 +84,16 @@ export class WhatsAppController {
   }
 
   @Get("outbox")
-  outbox(@Query("limit") limit?: string) {
-    return { data: this.whatsapp.outbox(Number(limit) || 100) };
+  outbox(
+    @Query("limit") limit?: string,
+    @Query("includeAcknowledged") includeAcknowledged?: string,
+  ) {
+    return {
+      data: this.whatsapp.outbox(
+        Number(limit) || 100,
+        includeAcknowledged === "1" || includeAcknowledged === "true",
+      ),
+    };
   }
 
   @Post("outbox/:id/retry")

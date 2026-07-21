@@ -16,6 +16,7 @@ import { DatabaseService } from "../database/database.service.js";
 import { MissionEventBus } from "../missions/mission-event.bus.js";
 import { MissionRepository } from "../missions/mission.repository.js";
 import {
+  acknowledgementRetryDelay,
   parseWhatsAppCommand,
   WhatsAppService,
   splitWhatsAppText,
@@ -65,6 +66,13 @@ class FakeClient extends EventEmitter implements WhatsAppClient {
     this.emit("message", message);
   }
 }
+
+test("missing acknowledgements back off from two to five minutes", () => {
+  assert.equal(acknowledgementRetryDelay(1), 120_000);
+  assert.equal(acknowledgementRetryDelay(2), 240_000);
+  assert.equal(acknowledgementRetryDelay(3), 300_000);
+  assert.equal(acknowledgementRetryDelay(20), 300_000);
+});
 
 test("linked-device QR routes self messages into the shared conversation", async () => {
   const home = mkdtempSync(join(tmpdir(), "orkestr-wa-test-"));
@@ -212,6 +220,14 @@ test("linked-device QR routes self messages into the shared conversation", async
     await service.sendFileToSelf(validFile);
     await settle();
     assert.equal(client.sentFiles[0]?.path, realpathSync(validFile));
+    assert.equal(client.sentFiles[0]?.chatId, "46700000000@c.us");
+    client.emit("message_ack", { id: { _serialized: "file-1" } }, 1);
+    await settle();
+    assert.equal(service.outbox().length, 0);
+    assert.equal(
+      (service.outbox(100, true)[0] as { status: string }).status,
+      "acknowledged",
+    );
     const disallowedFile = join(home, "private.txt");
     writeFileSync(disallowedFile, "private");
     await assert.rejects(

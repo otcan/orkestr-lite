@@ -119,6 +119,11 @@ assert.ok(
   ),
   "WhatsApp follow-up did not return the updated Markdown report",
 );
+await waitForWhatsAppAttachmentAcknowledgement(
+  whatsappTurn.id,
+  "agent-runtime-landscape.md",
+  5 * 60_000,
+);
 emit("whatsapp.completed", {
   turnId: whatsappTurn.id,
   controlCode: whatsappTurn.controlCode,
@@ -227,6 +232,31 @@ async function waitForWhatsAppFollowup(after, timeoutMs) {
     await delay(2_000);
   }
   throw new Error("Timed out waiting for the WhatsApp demo follow-up");
+}
+
+async function waitForWhatsAppAttachmentAcknowledgement(
+  turnId,
+  fileName,
+  timeoutMs,
+) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  while (Date.now() < deadline) {
+    const result = await request(
+      "/api/whatsapp/outbox?limit=250&includeAcknowledged=true",
+    );
+    latest = result.data.find(
+      (item) =>
+        item.turnId === turnId &&
+        item.kind === "media" &&
+        item.fileName === fileName,
+    );
+    if (latest?.status === "acknowledged") return latest;
+    await delay(2_000);
+  }
+  throw new Error(
+    `WhatsApp did not acknowledge ${fileName}: ${JSON.stringify(latest)}`,
+  );
 }
 
 async function request(path, options = {}) {
