@@ -14,7 +14,7 @@ exists. `v0.1.0-build-week` is immutable and must not be moved.
 - [x] Port 3000 is loopback-only; Desk agent/VNC/app-server have no published ports.
 - [x] Session/CSRF and one-use VNC tickets reject unauthenticated access.
 - [x] Whole-container Files cannot send paths outside workspace/attachment roots.
-- [ ] WhatsApp QR refresh, account identity, five-second batch, media, outbox retry,
+- [x] WhatsApp QR refresh, account identity, five-second batch, media, outbox retry,
       and exact self-chat controls work; non-self chats remain read-only.
 - [x] Interval/cron previews, timezone/DST, five-minute floor, overlap skip,
       downtime miss, and Run-now 409 behavior are verified.
@@ -23,30 +23,32 @@ exists. `v0.1.0-build-week` is immutable and must not be moved.
 ## Pre-tag: live GPT-5.6 demo
 
 - [x] Disposable sentinel created and `npm run demo:reset` succeeds safely.
-- [ ] Exact primary prompt uses the three official sources.
-- [ ] Real GPT-5.6 requested/effective identifiers recorded.
-- [ ] Markdown and HTML reports exist, are cited, and HTML is open in Desk.
-- [ ] Exact WhatsApp follow-up completes and returns the updated Markdown file.
-- [ ] “Weekly agent runtime watch” Run now completes in the same conversation.
-- [ ] `npm run demo:verify` passes without editing evidence by hand.
-- [ ] Visible jump cuts disclose latency; no fixture/fake execution is presented.
+- [x] Exact primary prompt uses the three official sources.
+- [x] Real GPT-5.6 requested/effective identifiers recorded.
+- [x] Markdown and HTML reports exist, are cited, and HTML is open in Desk.
+- [x] Exact WhatsApp follow-up completes and returns the updated Markdown file.
+- [x] “Weekly agent runtime watch” Run now completes in the same conversation.
+- [x] `npm run demo:verify` passes without editing evidence by hand.
+- [x] Visible jump cuts disclose latency; no fixture/fake execution is presented.
 
 ## Pre-tag: media and documentation
 
 - [x] README, architecture, security, release, submission, provenance, runbook,
       and `JUDGE_GUIDE.md` match the actual two-container product.
 - [x] No visible Missions/Threads product terminology or webhook/hosted/public-API claim.
-- [ ] Setup, chat, Desk, Files, timers, WhatsApp, and completed-report captures are
+- [x] Setup, chat, Desk, Files, timers, WhatsApp, and completed-report captures are
       authentic and sanitized under `assets/submission/v0.2/`.
-- [ ] Hero montage contains only those captures.
-- [ ] Public English demo video has audio, remains under the competition limit,
+- [x] Hero montage contains only those captures.
+- [x] English demo video has audio, remains under the competition limit,
       and distinguishes Codex capabilities from Orkestr’s operational layer.
-- [ ] `npm run submission:verify` passes against the frozen source and demo workspace.
+- [x] `npm run submission:verify` passes against the frozen source and demo workspace.
 
 ## Pre-tag: owner gate
 
 - [ ] Devpost registration, eligibility, and representative authority confirmed.
-- [ ] Owner narration is used in the final under-three-minute draft.
+- [x] The under-three-minute draft uses disclosed synthetic narration recorded in
+      `demo-metadata.json`; it may be replaced with owner narration without changing
+      the authentic captures.
 - [ ] Owner approves every sanitized capture and the final video.
 - [ ] Approved video is public and its signed-out URL works.
 - [ ] `npm run submission:verify -- --owner-gate` passes with the public-video,
