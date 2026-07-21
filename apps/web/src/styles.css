@@ -416,6 +416,7 @@ details summary {
 }
 .device-code {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
   margin-top: 15px;
@@ -432,6 +433,11 @@ details summary {
 .device-code a {
   margin-left: auto;
   color: var(--green);
+}
+.device-code small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
 }
 .diagnostics {
   display: grid;

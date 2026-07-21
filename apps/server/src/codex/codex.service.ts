@@ -24,6 +24,9 @@ import { RUNTIME_CONFIG } from "../config/config.module.js";
 import type { RuntimeConfig } from "../config/runtime-config.js";
 
 const execFileAsync = promisify(execFile);
+const DEVICE_CODE_LIFETIME_MS = 15 * 60_000;
+const DEVICE_CODE_REFRESH_MARGIN_MS = 30_000;
+const DEVICE_CODE_REFRESH_RETRY_MS = 5_000;
 
 interface CodexServiceEvents {
   notification: [notification: CodexNotification];
@@ -71,6 +74,7 @@ export interface CodexStatus {
     loginId: string | null;
     verificationUrl: string | null;
     userCode: string | null;
+    expiresAt: string | null;
     error: string | null;
   };
 }
@@ -81,6 +85,8 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
   private readonly events = new EventEmitter<CodexServiceEvents>();
   private client: CodexAppServerClient | null = null;
   private restartTimer: NodeJS.Timeout | null = null;
+  private deviceLoginRefreshTimer: NodeJS.Timeout | null = null;
+  private deviceLoginRequest: Promise<DeviceCodeLoginResult> | null = null;
   private restartAttempt = 0;
   private shuttingDown = false;
   private deskSelected = false;
@@ -110,6 +116,7 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
         loginId: null,
         verificationUrl: null,
         userCode: null,
+        expiresAt: null,
         error: null,
       },
     };
@@ -122,6 +129,7 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     this.shuttingDown = true;
     if (this.restartTimer) clearTimeout(this.restartTimer);
+    this.clearDeviceLoginRefresh();
     await this.client?.stop();
   }
 
@@ -152,16 +160,14 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
   }
 
   async startDeviceLogin(): Promise<DeviceCodeLoginResult> {
-    const client = this.requireClient();
-    const result = await client.loginDeviceCode();
-    this.status.login = {
-      state: "waiting",
-      loginId: result.loginId,
-      verificationUrl: result.verificationUrl,
-      userCode: result.userCode,
-      error: null,
-    };
-    return result;
+    if (this.deviceLoginRequest) return this.deviceLoginRequest;
+    const request = this.requestDeviceLogin();
+    this.deviceLoginRequest = request;
+    try {
+      return await request;
+    } finally {
+      if (this.deviceLoginRequest === request) this.deviceLoginRequest = null;
+    }
   }
 
   async loginApiKey(apiKey: string): Promise<void> {
@@ -171,8 +177,10 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
       loginId: null,
       verificationUrl: null,
       userCode: null,
+      expiresAt: null,
       error: null,
     };
+    this.clearDeviceLoginRefresh();
     await client.loginApiKey(apiKey);
     await this.refreshAccountAndModels();
   }
@@ -381,18 +389,31 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
   private handleNotification(notification: CodexNotification): void {
     this.status.lastMessageAt = new Date().toISOString();
     if (notification.method === "account/login/completed") {
+      const loginId = stringOrNull(notification.params.loginId);
+      if (
+        loginId &&
+        this.status.login.loginId &&
+        loginId !== this.status.login.loginId
+      ) {
+        this.events.emit("notification", notification);
+        return;
+      }
       const success = notification.params.success === true;
+      const error = stringOrNull(notification.params.error);
       this.status.login = {
         state: success ? "succeeded" : "failed",
         loginId: success ? null : this.status.login.loginId,
         verificationUrl: success ? null : this.status.login.verificationUrl,
         userCode: success ? null : this.status.login.userCode,
-        error:
-          typeof notification.params.error === "string"
-            ? notification.params.error
-            : null,
+        expiresAt: success ? null : this.status.login.expiresAt,
+        error,
       };
-      if (success) this.requestAuthenticationRefresh();
+      if (success) {
+        this.clearDeviceLoginRefresh();
+        this.requestAuthenticationRefresh();
+      } else if (error?.includes("timed out after 15 minutes")) {
+        void this.rotateDeviceLogin(this.status.login.loginId);
+      }
     }
     if (notification.method === "account/updated") {
       this.status.authMode = stringOrNull(notification.params.authMode);
@@ -404,8 +425,10 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
           loginId: null,
           verificationUrl: null,
           userCode: null,
+          expiresAt: null,
           error: null,
         };
+        this.clearDeviceLoginRefresh();
         this.requestAuthenticationRefresh();
       }
     }
@@ -419,6 +442,55 @@ export class CodexService implements OnModuleInit, OnModuleDestroy {
         `Could not refresh the authenticated Codex account: ${this.status.login.error}`,
       );
     });
+  }
+
+  private async requestDeviceLogin(): Promise<DeviceCodeLoginResult> {
+    const result = await this.requireClient().loginDeviceCode();
+    const expiresAt = new Date(Date.now() + DEVICE_CODE_LIFETIME_MS);
+    this.status.login = {
+      state: "waiting",
+      loginId: result.loginId,
+      verificationUrl: result.verificationUrl,
+      userCode: result.userCode,
+      expiresAt: expiresAt.toISOString(),
+      error: null,
+    };
+    this.scheduleDeviceLoginRefresh(
+      result.loginId,
+      DEVICE_CODE_LIFETIME_MS - DEVICE_CODE_REFRESH_MARGIN_MS,
+    );
+    return result;
+  }
+
+  private scheduleDeviceLoginRefresh(loginId: string, delay: number): void {
+    this.clearDeviceLoginRefresh();
+    this.deviceLoginRefreshTimer = setTimeout(() => {
+      this.deviceLoginRefreshTimer = null;
+      void this.rotateDeviceLogin(loginId);
+    }, delay);
+  }
+
+  private async rotateDeviceLogin(loginId: string | null): Promise<void> {
+    if (
+      !loginId ||
+      this.status.authenticated ||
+      this.status.login.loginId !== loginId
+    ) {
+      return;
+    }
+    try {
+      await this.startDeviceLogin();
+    } catch (error) {
+      this.status.login.state = "failed";
+      this.status.login.error = `Could not refresh device code: ${errorMessage(error)}`;
+      this.scheduleDeviceLoginRefresh(loginId, DEVICE_CODE_REFRESH_RETRY_MS);
+    }
+  }
+
+  private clearDeviceLoginRefresh(): void {
+    if (!this.deviceLoginRefreshTimer) return;
+    clearTimeout(this.deviceLoginRefreshTimer);
+    this.deviceLoginRefreshTimer = null;
   }
 
   private applyAccount(result: AccountReadResult): void {
