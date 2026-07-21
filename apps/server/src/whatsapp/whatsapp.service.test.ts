@@ -35,6 +35,8 @@ class FakeClient extends EventEmitter implements WhatsAppClient {
   readonly sent: Array<{ chatId: string; text: string }> = [];
   readonly sentFiles: Array<{ chatId: string; path: string }> = [];
   returnMessageModel = false;
+  returnFileMessageModel = true;
+  echoFileDuringSend = false;
 
   initialize(): void {}
 
@@ -51,7 +53,20 @@ class FakeClient extends EventEmitter implements WhatsAppClient {
 
   async sendFile(chatId: string, path: string) {
     this.sentFiles.push({ chatId, path });
-    return { id: { _serialized: `file-${this.sentFiles.length}` } };
+    const id = `file-${this.sentFiles.length}`;
+    if (this.echoFileDuringSend) {
+      this.emit("message_create", {
+        id: { _serialized: id, remote: "123456789@lid" },
+        fromMe: true,
+        to: "123456789@lid",
+        type: "document",
+        deviceType: "web",
+        hasMedia: true,
+      } satisfies WhatsAppMessage);
+    }
+    return this.returnFileMessageModel
+      ? { id: { _serialized: id } }
+      : undefined;
   }
 
   logout(): void {}
@@ -228,25 +243,27 @@ test("linked-device QR routes self messages into the shared conversation", async
       (service.outbox(100, true)[0] as { status: string }).status,
       "acknowledged",
     );
-    const inputCountBeforeFailure = createdInputs.length;
+    const inputCountBeforeMediaEcho = createdInputs.length;
+    client.returnFileMessageModel = false;
+    client.echoFileDuringSend = true;
     await service.sendFileToSelf(validFile);
     await settle();
-    client.emitMessage({
-      id: { _serialized: "file-failed", remote: "123456789@lid" },
-      fromMe: true,
-      to: "123456789@lid",
-      body: "Could not send the message: r",
-    });
-    await settle();
-    assert.equal(createdInputs.length, inputCountBeforeFailure);
-    const failedMedia = service
-      .outbox()
-      .find((item) => (item as { kind: string }).kind === "media") as {
-      status: string;
-      lastError: string;
-    };
-    assert.equal(failedMedia.status, "failed");
-    assert.equal(failedMedia.lastError, "Could not send the message: r");
+    assert.equal(createdInputs.length, inputCountBeforeMediaEcho);
+    assert.equal(
+      service
+        .outbox()
+        .filter((item) => (item as { kind: string }).kind === "media").length,
+      0,
+      "the outgoing media callback should acknowledge the outbox row",
+    );
+    assert.equal(
+      client.sent.some(({ text }) =>
+        text.startsWith("Could not send the message"),
+      ),
+      false,
+      "the app must not try to download its own outgoing document",
+    );
+    client.echoFileDuringSend = false;
     const disallowedFile = join(home, "private.txt");
     writeFileSync(disallowedFile, "private");
     await assert.rejects(
