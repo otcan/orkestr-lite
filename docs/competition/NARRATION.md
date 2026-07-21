@@ -3,6 +3,9 @@
 Target: about 135 seconds. Speak naturally; do not speed up to hit the marks.
 The editor holds each authentic capture for the same fraction of the finished
 recording and labels every cut. Keep the final audio below 179 seconds.
+For the unattended submission draft, a synthetic reading is permitted only when
+the rendered video labels it as synthetic narration and records that choice in
+`demo-metadata.json`.
 
 | Time      | Narration                                                                                                                                                                                                                                                              |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

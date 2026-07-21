@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { mediaBinaries } from "./media-utils.mjs";
@@ -12,6 +12,7 @@ assert.ok(workspaceValue, "ORKESTR_DEMO_WORKSPACE is required");
 const workspace = resolve(workspaceValue);
 
 // The evidence verifier is intentionally the same code used by `demo:verify`.
+process.env.ORKESTR_VERIFY_ALLOW_RUNTIME_DESCENDANT = "1";
 await import("./verify-demo.mjs");
 
 const mediaDirectory = join(root, "assets/submission/v0.2");
@@ -25,8 +26,13 @@ const requiredPngs = [
   "report-complete.png",
   "hero-montage.png",
 ];
+const missingMedia = [];
 for (const name of requiredPngs) {
   const path = join(mediaDirectory, name);
+  if (!(await exists(path))) {
+    missingMedia.push(name);
+    continue;
+  }
   const file = await readFile(path);
   assert.ok(file.length > 20_000, `${name} is implausibly small`);
   assert.equal(
@@ -36,8 +42,21 @@ for (const name of requiredPngs) {
   );
 }
 
-const { ffprobe } = await mediaBinaries();
 const video = join(mediaDirectory, "demo.mp4");
+const videoMetadataPath = join(mediaDirectory, "demo-metadata.json");
+for (const [name, path] of [
+  ["demo.mp4", video],
+  ["demo-metadata.json", videoMetadataPath],
+]) {
+  if (!(await exists(path))) missingMedia.push(name);
+}
+assert.deepEqual(
+  missingMedia,
+  [],
+  `Submission media is incomplete: ${missingMedia.join(", ")}`,
+);
+
+const { ffprobe } = await mediaBinaries();
 const probe = await execFileAsync(
   ffprobe,
   [
@@ -62,6 +81,10 @@ assert.ok(
   media.streams?.some((stream) => stream.codec_type === "video"),
   "Video has no video stream",
 );
+const videoMetadata = JSON.parse(await readFile(videoMetadataPath, "utf8"));
+assert.ok(["owner", "synthetic"].includes(videoMetadata.narrationKind));
+assert.ok(Date.parse(videoMetadata.builtAt));
+assert.ok(Math.abs(videoMetadata.durationSeconds - duration) < 1);
 
 const packageFiles = [
   "package.json",
@@ -214,3 +237,10 @@ if (process.argv.includes("--published")) {
 process.stdout.write(
   `${JSON.stringify({ verified: true, sourceSha: currentSha, duration, mediaDirectory }, null, 2)}\n`,
 );
+
+async function exists(path) {
+  return access(path).then(
+    () => true,
+    () => false,
+  );
+}

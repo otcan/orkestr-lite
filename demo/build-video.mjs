@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { chromium } from "playwright";
@@ -11,9 +11,14 @@ const directory = resolve(
     join(root, "assets/submission/v0.2"),
 );
 const narrationValue = process.env.ORKESTR_NARRATION;
+const narrationKind = process.env.ORKESTR_NARRATION_KIND ?? "owner";
 assert.ok(
   narrationValue,
-  "ORKESTR_NARRATION must point to the owner's recording",
+  "ORKESTR_NARRATION must point to a narration recording",
+);
+assert.ok(
+  ["owner", "synthetic"].includes(narrationKind),
+  "ORKESTR_NARRATION_KIND must be owner or synthetic",
 );
 const narration = resolve(narrationValue);
 await access(narration);
@@ -66,7 +71,7 @@ try {
       .shade{position:absolute;inset:auto 0 0;height:180px;background:linear-gradient(transparent,rgba(4,9,18,.96))}
       .caption{position:absolute;left:80px;right:80px;bottom:46px;font-size:42px;font-weight:700;letter-spacing:-.02em;text-shadow:0 2px 12px #000}
       .truth{position:absolute;right:80px;top:44px;padding:12px 18px;border-radius:999px;background:rgba(4,9,18,.82);font-size:22px;color:#b9cdf4}
-    </style><img src="${image}" alt=""><div class="shade"></div><div class="caption"></div><div class="truth">Authentic capture · visible jump cuts</div>`);
+    </style><img src="${image}" alt=""><div class="shade"></div><div class="caption"></div><div class="truth">Authentic capture · visible jump cuts · ${narrationKind === "synthetic" ? "synthetic narration" : "owner narration"}</div>`);
     await page.locator(".caption").evaluate((node, value) => {
       node.textContent = value;
     }, caption);
@@ -125,6 +130,21 @@ try {
     join(directory, "demo.mp4"),
   );
   await run(ffmpeg, args);
+  await writeFile(
+    join(directory, "demo-metadata.json"),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        builtAt: new Date().toISOString(),
+        narrationKind,
+        narrationFile: basename(narration),
+        durationSeconds: narrationDuration,
+        visibleJumpCuts: true,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

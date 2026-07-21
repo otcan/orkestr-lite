@@ -119,7 +119,7 @@ assert.ok(
   ),
   "WhatsApp follow-up did not return the updated Markdown report",
 );
-await waitForWhatsAppAttachmentAcknowledgement(
+const whatsappDelivery = await waitForWhatsAppAttachmentAcknowledgement(
   whatsappTurn.id,
   "agent-runtime-landscape.md",
   5 * 60_000,
@@ -128,6 +128,8 @@ emit("whatsapp.completed", {
   turnId: whatsappTurn.id,
   controlCode: whatsappTurn.controlCode,
   outputAttachment: "agent-runtime-landscape.md",
+  outboxId: whatsappDelivery.id,
+  deliveryStatus: whatsappDelivery.status,
 });
 
 const now = new Date();
@@ -167,6 +169,11 @@ const evidence = {
   whatsapp: {
     ...evidenceTurn(whatsappTurn),
     outputAttachment: "agent-runtime-landscape.md",
+    delivery: {
+      outboxId: whatsappDelivery.id,
+      status: whatsappDelivery.status,
+      fileName: whatsappDelivery.fileName,
+    },
   },
   schedule: {
     id: timer.id,
