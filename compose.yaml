@@ -8,6 +8,7 @@ services:
       - "127.0.0.1:${ORKESTR_HOST_PORT:-3000}:3000"
     volumes:
       - orkestr-data:/data
+      - orkestr-attachments:/data/attachments
       - orkestr-workspace:/workspace
       - orkestr-codex:/codex
       - orkestr-desk-auth:/run/orkestr-desk-auth:ro
@@ -37,6 +38,7 @@ services:
       target: desk-runtime
     shm_size: "1gb"
     volumes:
+      - orkestr-attachments:/data/attachments
       - orkestr-workspace:/workspace
       - orkestr-codex:/codex
       - orkestr-desk-home:/home/orkestr
@@ -51,6 +53,7 @@ services:
 
 volumes:
   orkestr-data:
+  orkestr-attachments:
   orkestr-workspace:
   orkestr-codex:
   orkestr-desk-home:

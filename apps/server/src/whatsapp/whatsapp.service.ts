@@ -88,6 +88,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
   private qrUpdatedAt: string | null = null;
   private qrVersion: string | null = null;
   private selfChatId: string | null = null;
+  private selfChatMediaId: string | null = null;
   private selfChatAliases = new Set<string>();
   private accountLabel: string | null = null;
   private accountName: string | null = null;
@@ -263,6 +264,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     this.retryAt = null;
     this.retryAttempt = 0;
     this.selfChatId = null;
+    this.selfChatMediaId = null;
     this.selfChatAliases.clear();
     this.accountLabel = null;
     this.accountName = null;
@@ -407,6 +409,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     const identities = await resolveSelfChatIdentities(client, accountId);
     this.selfChatAliases = new Set(identities.aliases);
     this.selfChatId = identities.destination;
+    this.selfChatMediaId = identities.phoneId;
     this.database.setSetting(SELF_CHAT_KEY, identities.destination);
     this.accountName = client.info?.pushname || "WhatsApp";
     this.accountNumber = whatsappNumber(identities.phoneId || accountId);
@@ -452,6 +455,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     const messageId =
       serializedId(message.id) || `${chatId}:${message.timestamp}`;
     if (!text && !message.hasMedia) return;
+    if (this.consumeOutboundMedia(message, messageId)) return;
     if (text && this.consumeRecentOutboundText(text)) {
       const now = new Date().toISOString();
       this.database.db
@@ -869,6 +873,55 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     return messageId || null;
   }
 
+  private consumeOutboundMedia(
+    message: WhatsAppMessage,
+    messageId: string,
+  ): boolean {
+    if (
+      !message.fromMe ||
+      !message.hasMedia ||
+      (message.deviceType && message.deviceType !== "web")
+    ) {
+      return false;
+    }
+    const cutoff = new Date(Date.now() - 60_000).toISOString();
+    const row = this.database.db
+      .prepare(
+        `SELECT o.id, o.turn_id AS turnId, a.original_name AS fileName
+         FROM whatsapp_outbox o
+         JOIN attachments a ON a.id = o.attachment_id
+         WHERE o.kind = 'media' AND o.status IN ('sending', 'sent_unconfirmed')
+         AND o.updated_at >= ?
+         ORDER BY CASE o.status WHEN 'sending' THEN 0 ELSE 1 END,
+                  o.updated_at DESC, o.created_at ASC, o.ordinal ASC
+         LIMIT 1`,
+      )
+      .get(cutoff) as
+      | { id: string; turnId: string | null; fileName: string }
+      | undefined;
+    if (!row) return false;
+
+    const now = new Date().toISOString();
+    this.database.db
+      .prepare(
+        `UPDATE whatsapp_outbox SET status = 'acknowledged',
+         remote_message_id = ?, next_attempt_at = ?, last_error = NULL,
+         updated_at = ? WHERE id = ?`,
+      )
+      .run(messageId, now, now, row.id);
+    this.recordLegacyOutbound(messageId, row.turnId);
+    this.recordMessage(
+      messageId,
+      "outbound",
+      row.turnId,
+      "outbox",
+      `[File] ${row.fileName}`,
+      "acknowledged",
+    );
+    this.publishStatus();
+    return true;
+  }
+
   async sendFileToSelf(path: string): Promise<WhatsAppSnapshot> {
     const attachmentId = await this.registerExplicitAttachment(path);
     this.enqueueMedia(attachmentId, null, 0);
@@ -876,7 +929,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     return this.snapshot();
   }
 
-  outbox(limit = 100) {
+  outbox(limit = 100, includeAcknowledged = false) {
     return this.database.db
       .prepare(
         `SELECT o.id, o.turn_id AS turnId, o.kind, o.body, o.status,
@@ -885,10 +938,10 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
                 a.original_name AS fileName
          FROM whatsapp_outbox o
          LEFT JOIN attachments a ON a.id = o.attachment_id
-         WHERE o.status != 'acknowledged'
+         WHERE (? = 1 OR o.status != 'acknowledged')
          ORDER BY o.created_at ASC, o.ordinal ASC LIMIT ?`,
       )
-      .all(Math.max(1, Math.min(250, limit)));
+      .all(includeAcknowledged ? 1 : 0, Math.max(1, Math.min(250, limit)));
   }
 
   retryOutbox(id: string): WhatsAppSnapshot {
@@ -1301,10 +1354,16 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
             if (!attachment || !this.client.sendFile)
               throw new Error("Attachment is unavailable");
             const result = await this.client.sendFile(
-              this.selfChatId!,
+              this.selfChatMediaId || this.selfChatId!,
               attachment.storage_path,
             );
-            remoteMessageId = serializedId(result?.id) || null;
+            const correlated = this.database.db
+              .prepare(
+                "SELECT remote_message_id AS remoteMessageId FROM whatsapp_outbox WHERE id = ?",
+              )
+              .get(row.id) as { remoteMessageId: string | null } | undefined;
+            remoteMessageId =
+              serializedId(result?.id) || correlated?.remoteMessageId || null;
             const durableId =
               remoteMessageId ||
               `pending:${randomMessageId(attachment.original_name)}`;
@@ -1326,13 +1385,18 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
             )
             .run(
               remoteMessageId,
-              new Date(Date.now() + ACK_TIMEOUT_MS).toISOString(),
+              new Date(
+                Date.now() + acknowledgementRetryDelay(row.attempt_count + 1),
+              ).toISOString(),
               new Date().toISOString(),
               row.id,
             );
         } catch (error) {
           const attempt = row.attempt_count + 1;
-          const delay = Math.min(5 * 60_000, 5_000 * 2 ** Math.min(attempt, 6));
+          const delay =
+            row.kind === "media"
+              ? acknowledgementRetryDelay(attempt)
+              : Math.min(5 * 60_000, 5_000 * 2 ** Math.min(attempt, 6));
           this.database.db
             .prepare(
               `UPDATE whatsapp_outbox SET status = 'failed', next_attempt_at = ?,
@@ -1832,6 +1896,11 @@ function randomMessageId(text: string): string {
     .update(`${Date.now()}:${Math.random()}:${text}`)
     .digest("base64url")
     .slice(0, 24);
+}
+
+export function acknowledgementRetryDelay(attempt: number): number {
+  const safeAttempt = Math.max(1, Math.floor(attempt));
+  return Math.min(5 * 60_000, ACK_TIMEOUT_MS * 2 ** (safeAttempt - 1));
 }
 
 export function splitWhatsAppText(text: string, limit = 3_500): string[] {

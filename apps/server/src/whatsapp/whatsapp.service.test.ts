@@ -16,6 +16,7 @@ import { DatabaseService } from "../database/database.service.js";
 import { MissionEventBus } from "../missions/mission-event.bus.js";
 import { MissionRepository } from "../missions/mission.repository.js";
 import {
+  acknowledgementRetryDelay,
   parseWhatsAppCommand,
   WhatsAppService,
   splitWhatsAppText,
@@ -34,6 +35,8 @@ class FakeClient extends EventEmitter implements WhatsAppClient {
   readonly sent: Array<{ chatId: string; text: string }> = [];
   readonly sentFiles: Array<{ chatId: string; path: string }> = [];
   returnMessageModel = false;
+  returnFileMessageModel = true;
+  echoFileDuringSend = false;
 
   initialize(): void {}
 
@@ -50,7 +53,20 @@ class FakeClient extends EventEmitter implements WhatsAppClient {
 
   async sendFile(chatId: string, path: string) {
     this.sentFiles.push({ chatId, path });
-    return { id: { _serialized: `file-${this.sentFiles.length}` } };
+    const id = `file-${this.sentFiles.length}`;
+    if (this.echoFileDuringSend) {
+      this.emit("message_create", {
+        id: { _serialized: id, remote: "123456789@lid" },
+        fromMe: true,
+        to: "123456789@lid",
+        type: "document",
+        deviceType: "web",
+        hasMedia: true,
+      } satisfies WhatsAppMessage);
+    }
+    return this.returnFileMessageModel
+      ? { id: { _serialized: id } }
+      : undefined;
   }
 
   logout(): void {}
@@ -65,6 +81,13 @@ class FakeClient extends EventEmitter implements WhatsAppClient {
     this.emit("message", message);
   }
 }
+
+test("missing acknowledgements back off from two to five minutes", () => {
+  assert.equal(acknowledgementRetryDelay(1), 120_000);
+  assert.equal(acknowledgementRetryDelay(2), 240_000);
+  assert.equal(acknowledgementRetryDelay(3), 300_000);
+  assert.equal(acknowledgementRetryDelay(20), 300_000);
+});
 
 test("linked-device QR routes self messages into the shared conversation", async () => {
   const home = mkdtempSync(join(tmpdir(), "orkestr-wa-test-"));
@@ -212,6 +235,35 @@ test("linked-device QR routes self messages into the shared conversation", async
     await service.sendFileToSelf(validFile);
     await settle();
     assert.equal(client.sentFiles[0]?.path, realpathSync(validFile));
+    assert.equal(client.sentFiles[0]?.chatId, "46700000000@c.us");
+    client.emit("message_ack", { id: { _serialized: "file-1" } }, 1);
+    await settle();
+    assert.equal(service.outbox().length, 0);
+    assert.equal(
+      (service.outbox(100, true)[0] as { status: string }).status,
+      "acknowledged",
+    );
+    const inputCountBeforeMediaEcho = createdInputs.length;
+    client.returnFileMessageModel = false;
+    client.echoFileDuringSend = true;
+    await service.sendFileToSelf(validFile);
+    await settle();
+    assert.equal(createdInputs.length, inputCountBeforeMediaEcho);
+    assert.equal(
+      service
+        .outbox()
+        .filter((item) => (item as { kind: string }).kind === "media").length,
+      0,
+      "the outgoing media callback should acknowledge the outbox row",
+    );
+    assert.equal(
+      client.sent.some(({ text }) =>
+        text.startsWith("Could not send the message"),
+      ),
+      false,
+      "the app must not try to download its own outgoing document",
+    );
+    client.echoFileDuringSend = false;
     const disallowedFile = join(home, "private.txt");
     writeFileSync(disallowedFile, "private");
     await assert.rejects(

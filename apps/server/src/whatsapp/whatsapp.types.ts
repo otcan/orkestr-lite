@@ -51,6 +51,7 @@ export interface WhatsAppMessage {
   isStatus?: boolean;
   timestamp?: number;
   type?: string;
+  deviceType?: string;
   hasMedia?: boolean;
   downloadMedia?: () => Promise<WhatsAppMedia | undefined>;
   getChat?: () => Promise<WhatsAppChat>;

@@ -11,8 +11,10 @@ flowchart LR
   WhatsApp["Linked WhatsApp self-chat"] -->|"whatsapp-web.js"| Control
   Control["Control container\nAngular + NestJS + SQLite"] -->|"private HTTP + WebSocket\nsecret token"| Desk
   Control --> Data[("/data\nSQLite + WhatsApp")]
+  Control --> Attachments[("/data/attachments\nshared attachment bytes")]
   Control --> Workspace[("/workspace")]
   Desk["Ubuntu Desk container\nCodex app-server + XFCE + Chromium + VNC"] --> Workspace
+  Desk --> Attachments
   Desk --> CodexHome[("/codex")]
   Desk --> DeskHome[("Desk home + browser state")]
 ```
@@ -90,6 +92,10 @@ and unpinned bytes expire after 30 days. Outbound paths must resolve to regular
 files inside `/workspace` or the attachment store, may not escape through a
 symlink, and are capped at 25 MB. The durable outbox retries until WhatsApp
 acknowledges or the operator discards an item. Delivery is at least once.
+Attachment bytes use a dedicated volume mounted at `/data/attachments` in both
+containers so Codex and the control outbox see the same files; the rest of
+control `/data`, including SQLite and WhatsApp session state, is not mounted in
+Desk.
 
 ## Files, terminal, and Desk
 

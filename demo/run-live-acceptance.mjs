@@ -1,26 +1,55 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { execFile } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { isAbsolute, join, resolve } from "node:path";
+import { promisify } from "node:util";
 
-const baseUrl = process.env.ORKESTR_LIVE_URL ?? "http://127.0.0.1:3000";
+const baseUrl = process.env.ORKESTR_LIVE_URL ?? "http://127.0.0.1:3001";
 const password = process.env.ORKESTR_LIVE_PASSWORD;
-const workspace = resolve(
-  process.env.ORKESTR_LIVE_WORKSPACE ??
-    process.env.ORKESTR_DEMO_WORKSPACE ??
-    "",
-);
+const workspace = resolve(process.env.ORKESTR_DEMO_WORKSPACE ?? "");
+let demoWorkspaceValidated = false;
+let sourceSha = process.env.ORKESTR_SOURCE_SHA ?? null;
+process.on("uncaughtExceptionMonitor", (error) => {
+  if (!demoWorkspaceValidated) return;
+  try {
+    writeFileSync(
+      join(workspace, ".orkestr/demo-failure-v0.2.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          failedAt: new Date().toISOString(),
+          baseUrl,
+          sourceSha,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : null,
+        },
+        null,
+        2,
+      )}\n`,
+      { mode: 0o600 },
+    );
+  } catch {}
+});
 const whatsappTimeoutMinutes = Math.max(
   1,
   Number(process.env.ORKESTR_DEMO_WHATSAPP_TIMEOUT_MINUTES) || 20,
 );
 
 if (!password) throw new Error("ORKESTR_LIVE_PASSWORD is required");
-if (
-  !process.env.ORKESTR_LIVE_WORKSPACE &&
-  !process.env.ORKESTR_DEMO_WORKSPACE
-) {
-  throw new Error("ORKESTR_LIVE_WORKSPACE is required");
+if (!process.env.ORKESTR_DEMO_WORKSPACE) {
+  throw new Error("ORKESTR_DEMO_WORKSPACE is required");
 }
+assert.ok(isAbsolute(process.env.ORKESTR_DEMO_WORKSPACE));
+assert.notEqual(workspace, "/workspace", "Use the bind-mounted host path");
+assert.equal(
+  (await readFile(join(workspace, ".orkestr-demo-disposable"), "utf8")).trim(),
+  "orkestr-lite-demo-v0.2",
+  "Disposable demo sentinel is missing or invalid",
+);
+demoWorkspaceValidated = true;
+const execFileAsync = promisify(execFile);
+sourceSha ??= (await execFileAsync("git", ["rev-parse", "HEAD"])).stdout.trim();
 
 const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
   method: "POST",
@@ -90,10 +119,17 @@ assert.ok(
   ),
   "WhatsApp follow-up did not return the updated Markdown report",
 );
+const whatsappDelivery = await waitForWhatsAppAttachmentAcknowledgement(
+  whatsappTurn.id,
+  "agent-runtime-landscape.md",
+  5 * 60_000,
+);
 emit("whatsapp.completed", {
   turnId: whatsappTurn.id,
   controlCode: whatsappTurn.controlCode,
   outputAttachment: "agent-runtime-landscape.md",
+  outboxId: whatsappDelivery.id,
+  deliveryStatus: whatsappDelivery.status,
 });
 
 const now = new Date();
@@ -127,12 +163,17 @@ await mkdir(join(workspace, ".orkestr"), { recursive: true });
 const evidence = {
   schemaVersion: 1,
   completedAt: new Date().toISOString(),
-  sourceSha: process.env.ORKESTR_SOURCE_SHA ?? null,
+  sourceSha,
   primaryPrompt: researchPrompt(),
   research: evidenceTurn(completedResearch),
   whatsapp: {
     ...evidenceTurn(whatsappTurn),
     outputAttachment: "agent-runtime-landscape.md",
+    delivery: {
+      outboxId: whatsappDelivery.id,
+      status: whatsappDelivery.status,
+      fileName: whatsappDelivery.fileName,
+    },
   },
   schedule: {
     id: timer.id,
@@ -151,12 +192,16 @@ emit("demo.passed", evidence);
 async function waitForSetup() {
   let latest;
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    latest = await request("/api/setup/status");
-    if (latest.firstMissionReady) return latest;
+    const [setup, whatsapp] = await Promise.all([
+      request("/api/setup/status"),
+      request("/api/setup/whatsapp/status"),
+    ]);
+    latest = { ...setup, whatsapp };
+    if (latest.ready && whatsapp.ready) return latest;
     await delay(1_000);
   }
   throw new Error(
-    `Orkestr did not become ready: ${JSON.stringify(latest?.codex ?? {})}`,
+    `Orkestr did not become ready: ${JSON.stringify({ codex: latest?.codex, whatsapp: latest?.whatsapp })}`,
   );
 }
 
@@ -194,6 +239,31 @@ async function waitForWhatsAppFollowup(after, timeoutMs) {
     await delay(2_000);
   }
   throw new Error("Timed out waiting for the WhatsApp demo follow-up");
+}
+
+async function waitForWhatsAppAttachmentAcknowledgement(
+  turnId,
+  fileName,
+  timeoutMs,
+) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  while (Date.now() < deadline) {
+    const result = await request(
+      "/api/whatsapp/outbox?limit=250&includeAcknowledged=true",
+    );
+    latest = result.data.find(
+      (item) =>
+        item.turnId === turnId &&
+        item.kind === "media" &&
+        item.fileName === fileName,
+    );
+    if (latest?.status === "acknowledged") return latest;
+    await delay(2_000);
+  }
+  throw new Error(
+    `WhatsApp did not acknowledge ${fileName}: ${JSON.stringify(latest)}`,
+  );
 }
 
 async function request(path, options = {}) {

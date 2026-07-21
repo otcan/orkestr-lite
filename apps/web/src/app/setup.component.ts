@@ -23,6 +23,7 @@ interface SetupStatus {
       state: string;
       verificationUrl: string | null;
       userCode: string | null;
+      expiresAt: string | null;
       error: string | null;
     };
   };
@@ -122,6 +123,7 @@ interface WhatsAppStatus {
                     >
                       Open verification page
                     </a>
+                    <small>Refreshes automatically before it expires.</small>
                   </div>
                 }
 
@@ -133,7 +135,11 @@ interface WhatsAppStatus {
                       (click)="startDeviceLogin()"
                       [disabled]="busy"
                     >
-                      Connect with ChatGPT
+                      {{
+                        status.codex.login.userCode
+                          ? "Refresh code now"
+                          : "Connect with ChatGPT"
+                      }}
                     </button>
                     <details>
                       <summary>Use an API key instead</summary>

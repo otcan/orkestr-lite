@@ -8,11 +8,11 @@ export const createWhatsAppClient: WhatsAppClientFactory = async (options) => {
   const loaded = whatsapp as unknown as {
     Client?: new (options: unknown) => WhatsAppClient;
     LocalAuth?: new (options: unknown) => unknown;
-    MessageMedia?: { fromFilePath(path: string): unknown };
+    MessageMedia?: { fromFilePath(path: string): WhatsAppDocumentMedia };
     default?: {
       Client?: new (options: unknown) => WhatsAppClient;
       LocalAuth?: new (options: unknown) => unknown;
-      MessageMedia?: { fromFilePath(path: string): unknown };
+      MessageMedia?: { fromFilePath(path: string): WhatsAppDocumentMedia };
     };
   };
   const Client = loaded.Client ?? loaded.default?.Client;
@@ -178,15 +178,31 @@ export const createWhatsAppClient: WhatsAppClientFactory = async (options) => {
       }
     };
   }
-  client.sendFile = (chatId, path, caption) =>
-    client.sendMessage(
+  client.sendFile = (chatId, path, caption) => {
+    const media = MessageMedia.fromFilePath(path);
+    media.mimetype = whatsAppDocumentMime(media.mimetype);
+    return client.sendMessage(
       chatId,
-      MessageMedia.fromFilePath(path) as never,
+      media as never,
       {
         sendMediaAsDocument: true,
         caption,
         waitUntilMsgSent: true,
       } as never,
     );
+  };
   return client;
 };
+
+interface WhatsAppDocumentMedia {
+  mimetype?: string | null;
+}
+
+export function whatsAppDocumentMime(mime: string | null | undefined): string {
+  const normalized = String(mime || "")
+    .trim()
+    .toLowerCase();
+  return normalized === "text/markdown" || !normalized
+    ? "application/octet-stream"
+    : normalized;
+}
