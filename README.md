@@ -7,6 +7,9 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20AMD64-8ef0b5)
 [![OpenAI Build Week](https://img.shields.io/badge/OpenAI-Build%20Week-111827)](https://openai.devpost.com/)
 
+**[View the screenshot demo](demo.html)** · [Run it yourself](#quickstart) ·
+[Judge guide](JUDGE_GUIDE.md)
+
 Codex can do serious agentic work. The unreliable part is everything around it:
 keeping a machine available, running work on a schedule, preserving browser
 state, connecting messaging, recovering after disconnects, and bringing the
@@ -264,7 +267,7 @@ target workspace contains the disposable-demo sentinel. See
 ## Built for OpenAI Build Week
 
 Orkestr Lite was built with Codex as the primary implementation environment and
-is submitted in the **Developer Tools** category.
+is submitted in the **Work & Productivity** category.
 
 Codex accelerated the app-server integration, persistent conversation
 controller, WhatsApp router, scheduler, terminal, file handling, Live Desk,

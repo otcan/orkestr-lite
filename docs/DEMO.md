@@ -86,11 +86,10 @@ completed sourced recommendation, and the returned Markdown document.
 7. Chat: the scheduled result in the same visible conversation.
 8. Terminal: `npm run demo:verify` passing.
 
-Use visible jump cuts for research latency. Never imply that a cut was
-uninterrupted real time and never substitute fake Codex output. A final montage
-may use only sanitized captures from this run.
+Use honest cuts for research latency. Never imply that a cut was uninterrupted
+real time and never substitute fake Codex output.
 
-## Capture and video assembly
+## Submission assets
 
 Place the private phone source under `demo/private/` or another ignored path.
 It must contain only the demo self-chat. Supply either a crop, black redaction
@@ -101,22 +100,16 @@ export ORKESTR_WHATSAPP_CAPTURE="$PWD/demo/private/whatsapp-source.png"
 export ORKESTR_WHATSAPP_CROP='1170:1800:120:80'       # w:h:x:y, example only
 export ORKESTR_WHATSAPP_REDACTIONS='0:0:1170:160'     # x:y:w:h, comma-separated
 npm run demo:capture
-npm run demo:montage
 ```
 
-Visually inspect all seven images and `hero-montage.png`. Never use the crop
-example without checking the actual phone capture. To assemble the narrated
-draft, keep the owner's WAV/M4A/MP3 outside Git and run:
+Visually inspect all seven screenshots. Never use the crop example without
+checking the actual phone capture. The public screenshot walkthrough is the
+single static [`demo.html`](../demo.html) file. It uses those captures directly
+and has no generated montage or video.
 
-```bash
-export ORKESTR_NARRATION="$PWD/demo/private/narration.m4a"
-npm run demo:video
-npm run submission:verify
-```
-
-The video builder adds truthful capture/jump-cut captions, normalizes narration,
-and rejects audio at or above 179 seconds. See
-`docs/competition/NARRATION.md` for the timed English script.
+Record the public video manually in Loom against the real product. Follow the
+[Loom script](competition/NARRATION.md), keep the finished video below three
+minutes, and review it signed out before submitting its public URL.
 
 Stop the disposable stack with `npm run demo:down`. Do not remove its volumes or
 private inputs until all evidence has been reviewed and backed up.

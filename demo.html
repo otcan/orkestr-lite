@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A screenshot walkthrough of Orkestr Lite, the persistent Codex workstation for browser, WhatsApp, and scheduled work."
+    />
+    <meta name="theme-color" content="#07100c" />
+    <meta property="og:title" content="Orkestr Lite | Product walkthrough" />
+    <meta
+      property="og:description"
+      content="Codex can do the work. Orkestr keeps the workstation running."
+    />
+    <meta property="og:image" content="assets/submission/v0.2/chat.png" />
+    <title>Orkestr Lite | Product walkthrough</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07100c;
+        --panel: #0d1712;
+        --line: #25352c;
+        --text: #f4f7f5;
+        --muted: #a3afa8;
+        --mint: #96f2bd;
+        --mint-strong: #65d99b;
+        --max: 1180px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            circle at 50% -10%,
+            rgba(101, 217, 155, 0.13),
+            transparent 32rem
+          ),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        font-size: 17px;
+        line-height: 1.6;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        width: min(calc(100% - 40px), var(--max));
+        margin-inline: auto;
+      }
+
+      header {
+        position: sticky;
+        z-index: 10;
+        top: 0;
+        border-bottom: 1px solid rgba(37, 53, 44, 0.8);
+        background: rgba(7, 16, 12, 0.86);
+        backdrop-filter: blur(18px);
+      }
+
+      nav {
+        min-height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 11px;
+        text-decoration: none;
+        font-weight: 780;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-mark {
+        width: 29px;
+        height: 29px;
+        display: grid;
+        place-items: center;
+        border-radius: 9px;
+        background: var(--mint);
+        color: #06100b;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+      }
+
+      .nav-links a:hover,
+      .nav-links a:focus-visible {
+        color: var(--text);
+      }
+
+      .hero {
+        padding: 100px 0 72px;
+        text-align: center;
+      }
+
+      .eyebrow,
+      .step-number {
+        color: var(--mint);
+        font-size: 12px;
+        font-weight: 850;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        max-width: 900px;
+        margin: 18px auto 24px;
+        font-size: clamp(48px, 8vw, 88px);
+        line-height: 0.98;
+        letter-spacing: -0.065em;
+      }
+
+      .hero-copy {
+        max-width: 760px;
+        margin: 0 auto;
+        color: #bec8c2;
+        font-size: clamp(19px, 2.5vw, 24px);
+        line-height: 1.48;
+      }
+
+      .actions {
+        margin-top: 34px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+      }
+
+      .button {
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 20px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: 750;
+      }
+
+      .button.primary {
+        border-color: var(--mint);
+        background: var(--mint);
+        color: #07100c;
+      }
+
+      .button:hover,
+      .button:focus-visible {
+        transform: translateY(-1px);
+        border-color: var(--mint-strong);
+      }
+
+      .proof-line {
+        margin: 46px auto 0;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 9px;
+      }
+
+      .proof-line span {
+        padding: 7px 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(13, 23, 18, 0.72);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .hero-shot,
+      .shot {
+        display: block;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: #050906;
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.35);
+      }
+
+      .hero-shot {
+        margin-top: 58px;
+      }
+
+      .hero-shot img,
+      .shot img {
+        width: 100%;
+        height: auto;
+        display: block;
+        transition: transform 180ms ease;
+      }
+
+      .shot:hover img,
+      .shot:focus-visible img {
+        transform: scale(1.008);
+      }
+
+      .loop {
+        margin: 22px auto 120px;
+        display: grid;
+        grid-template-columns: 1fr auto 1.2fr auto 1fr;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .loop-card {
+        min-height: 148px;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+      }
+
+      .loop-card strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 18px;
+      }
+
+      .loop-card span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .arrow {
+        color: var(--mint);
+        font-size: 24px;
+      }
+
+      .section-heading {
+        max-width: 760px;
+        margin: 0 auto 80px;
+        text-align: center;
+      }
+
+      .section-heading h2 {
+        margin: 14px 0 18px;
+        font-size: clamp(36px, 6vw, 64px);
+        line-height: 1.04;
+        letter-spacing: -0.052em;
+      }
+
+      .section-heading p {
+        color: var(--muted);
+        font-size: 19px;
+      }
+
+      .story {
+        display: grid;
+        gap: 112px;
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: minmax(230px, 0.72fr) minmax(0, 1.65fr);
+        align-items: center;
+        gap: 58px;
+      }
+
+      .step:nth-child(even) {
+        grid-template-columns: minmax(0, 1.65fr) minmax(230px, 0.72fr);
+      }
+
+      .step:nth-child(even) .step-copy {
+        order: 2;
+      }
+
+      .step h3 {
+        margin: 12px 0 16px;
+        font-size: clamp(29px, 4vw, 44px);
+        line-height: 1.08;
+        letter-spacing: -0.045em;
+      }
+
+      .step-copy p {
+        margin-bottom: 0;
+        color: var(--muted);
+      }
+
+      .shot {
+        position: relative;
+      }
+
+      .shot::after {
+        content: "Open full screenshot";
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        padding: 8px 11px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 9px;
+        background: rgba(4, 9, 6, 0.84);
+        color: #d7ded9;
+        font-size: 11px;
+        font-weight: 750;
+        opacity: 0;
+        transition: opacity 160ms ease;
+      }
+
+      .shot:hover::after,
+      .shot:focus-visible::after {
+        opacity: 1;
+      }
+
+      .two-shots {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+
+      .two-shots .shot:first-child {
+        align-self: start;
+      }
+
+      .truth {
+        margin-top: 128px;
+        padding: 54px;
+        border: 1px solid rgba(150, 242, 189, 0.24);
+        border-radius: 22px;
+        background:
+          linear-gradient(135deg, rgba(150, 242, 189, 0.08), transparent 55%),
+          var(--panel);
+      }
+
+      .truth h2 {
+        max-width: 720px;
+        margin-bottom: 18px;
+        font-size: clamp(34px, 5vw, 54px);
+        line-height: 1.08;
+        letter-spacing: -0.045em;
+      }
+
+      .truth p {
+        max-width: 820px;
+        margin-bottom: 0;
+        color: #bdc8c1;
+      }
+
+      .uses {
+        padding: 112px 0;
+      }
+
+      .uses-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+
+      .use {
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+      }
+
+      .use strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      .use span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      footer {
+        padding: 78px 0 50px;
+        border-top: 1px solid var(--line);
+        text-align: center;
+      }
+
+      footer h2 {
+        margin-bottom: 18px;
+        font-size: clamp(34px, 5vw, 56px);
+        line-height: 1.06;
+        letter-spacing: -0.05em;
+      }
+
+      footer p {
+        max-width: 650px;
+        margin-inline: auto;
+        color: var(--muted);
+      }
+
+      .fine-print {
+        margin-top: 70px;
+        color: #718078;
+        font-size: 12px;
+      }
+
+      @media (max-width: 900px) {
+        .loop {
+          grid-template-columns: 1fr;
+          text-align: center;
+        }
+
+        .loop-card {
+          min-height: auto;
+        }
+
+        .arrow {
+          transform: rotate(90deg);
+        }
+
+        .step,
+        .step:nth-child(even) {
+          grid-template-columns: 1fr;
+          gap: 30px;
+        }
+
+        .step:nth-child(even) .step-copy {
+          order: initial;
+        }
+
+        .uses-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .shell {
+          width: min(calc(100% - 24px), var(--max));
+        }
+
+        .nav-links a:not(.github) {
+          display: none;
+        }
+
+        .hero {
+          padding-top: 72px;
+        }
+
+        h1 {
+          font-size: clamp(46px, 15vw, 68px);
+        }
+
+        .hero-shot,
+        .shot {
+          border-radius: 12px;
+        }
+
+        .two-shots,
+        .uses-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .truth {
+          padding: 28px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        .hero-shot img,
+        .shot img,
+        .button {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav class="shell" aria-label="Primary navigation">
+        <a class="brand" href="#top">
+          <span class="brand-mark" aria-hidden="true">O</span>
+          <span>Orkestr Lite</span>
+        </a>
+        <div class="nav-links">
+          <a href="#walkthrough">Walkthrough</a>
+          <a href="#uses">Use cases</a>
+          <a
+            class="github"
+            href="https://github.com/otcan/orkestr-lite"
+            target="_blank"
+            rel="noreferrer"
+            >GitHub</a
+          >
+        </div>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero shell">
+        <div class="eyebrow">An operational runtime for Codex</div>
+        <h1>Codex can do the work. Orkestr keeps it moving.</h1>
+        <p class="hero-copy">
+          One persistent Codex workstation you can reach from the browser or
+          WhatsApp, trigger manually or on a schedule, and supervise through a
+          live Ubuntu desk.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="#walkthrough"
+            >See the real workflow</a
+          >
+          <a
+            class="button"
+            href="https://github.com/otcan/orkestr-lite"
+            target="_blank"
+            rel="noreferrer"
+            >View the source</a
+          >
+        </div>
+        <div class="proof-line" aria-label="Product facts">
+          <span>Self-hosted with Docker</span>
+          <span>Codex + GPT-5.6</span>
+          <span>One continuous conversation</span>
+          <span>Real screenshots</span>
+        </div>
+        <a
+          class="hero-shot"
+          href="assets/submission/v0.2/chat.png"
+          target="_blank"
+          aria-label="Open the full Orkestr Chat screenshot"
+        >
+          <img
+            src="assets/submission/v0.2/chat.png"
+            alt="Orkestr Chat showing a real GPT-5.6 research request in one continuous Codex conversation"
+          />
+        </a>
+      </section>
+
+      <section class="loop shell" aria-label="Orkestr operating loop">
+        <div class="loop-card">
+          <strong>Start the work</strong>
+          <span
+            >Browser, WhatsApp, or a one-time, hourly, daily, weekly, or cron
+            schedule.</span
+          >
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="loop-card">
+          <strong>Codex keeps the context</strong>
+          <span
+            >One queue, one conversation, one Ubuntu workstation, and the same
+            files and browser state.</span
+          >
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="loop-card">
+          <strong>Stay in control</strong>
+          <span
+            >Watch the desk, take over when needed, and receive the result
+            wherever the work began.</span
+          >
+        </div>
+      </section>
+
+      <section id="walkthrough" class="shell">
+        <div class="section-heading">
+          <div class="eyebrow">One real run</div>
+          <h2>The task changes. The operating loop stays.</h2>
+          <p>
+            This run uses a sourced research task because it forces the whole
+            system to work: browser research, files, a phone follow-up, and a
+            scheduled return to the same context.
+          </p>
+        </div>
+
+        <div class="story">
+          <article class="step">
+            <div class="step-copy">
+              <div class="step-number">01 · Connect</div>
+              <h3>Bring your own Codex account.</h3>
+              <p>
+                Docker is already running. Connect Codex, optionally link your
+                own WhatsApp account, and open one private workstation. No
+                second bot account and no public hosted agent are required.
+              </p>
+            </div>
+            <a
+              class="shot"
+              href="assets/submission/v0.2/setup.png"
+              target="_blank"
+              aria-label="Open the full Workstation setup screenshot"
+            >
+              <img
+                loading="lazy"
+                src="assets/submission/v0.2/setup.png"
+                alt="Workstation setup with Codex and WhatsApp connected"
+              />
+            </a>
+          </article>
+
+          <article class="step">
+            <div class="step-copy">
+              <div class="step-number">02 · Execute</div>
+              <h3>Give Codex a real computer.</h3>
+              <p>
+                Codex works inside a persistent Ubuntu desk with Chromium,
+                terminal access, and the shared workspace. Watch it live, pause
+                it, or take control without breaking the conversation.
+              </p>
+            </div>
+            <a
+              class="shot"
+              href="assets/submission/v0.2/desk-report.png"
+              target="_blank"
+              aria-label="Open the full Live Desk screenshot"
+            >
+              <img
+                loading="lazy"
+                src="assets/submission/v0.2/desk-report.png"
+                alt="Live Ubuntu Desk with the generated research report open in Chromium"
+              />
+            </a>
+          </article>
+
+          <article class="step">
+            <div class="step-copy">
+              <div class="step-number">03 · Keep the output</div>
+              <h3>The work stays usable.</h3>
+              <p>
+                The report is not trapped in a chat reply. Its Markdown and HTML
+                files stay in the workstation, where you can inspect, download,
+                continue editing, or send them to WhatsApp.
+              </p>
+            </div>
+            <a
+              class="shot"
+              href="assets/submission/v0.2/files.png"
+              target="_blank"
+              aria-label="Open the full Workstation filesystem screenshot"
+            >
+              <img
+                loading="lazy"
+                src="assets/submission/v0.2/files.png"
+                alt="Workstation Files view containing cited Markdown and HTML reports"
+              />
+            </a>
+          </article>
+
+          <article class="step">
+            <div class="step-copy">
+              <div class="step-number">04 · Continue from your phone</div>
+              <h3>WhatsApp is part of the same conversation.</h3>
+              <p>
+                Here, the user asks for a follow-up from WhatsApp. Codex keeps
+                the existing research context, updates the report, and returns
+                the actual Markdown file to the same chat.
+              </p>
+            </div>
+            <a
+              class="shot"
+              href="assets/submission/v0.2/whatsapp.png"
+              target="_blank"
+              aria-label="Open the full WhatsApp workflow screenshot"
+            >
+              <img
+                loading="lazy"
+                src="assets/submission/v0.2/whatsapp.png"
+                alt="WhatsApp self-chat showing a Codex follow-up and a returned Markdown document"
+              />
+            </a>
+          </article>
+
+          <article class="step">
+            <div class="step-copy">
+              <div class="step-number">05 · Return on schedule</div>
+              <h3>Recurring work does not need another system.</h3>
+              <p>
+                A weekly source review is scheduled and run through the same
+                queue. The result returns to the existing conversation and is
+                mirrored to WhatsApp. Manual requests and timers do not create
+                disconnected agent histories.
+              </p>
+            </div>
+            <div class="two-shots">
+              <a
+                class="shot"
+                href="assets/submission/v0.2/timers.png"
+                target="_blank"
+                aria-label="Open the full Timers screenshot"
+              >
+                <img
+                  loading="lazy"
+                  src="assets/submission/v0.2/timers.png"
+                  alt="Timers view with a weekly Codex source review"
+                />
+              </a>
+              <a
+                class="shot"
+                href="assets/submission/v0.2/report-complete.png"
+                target="_blank"
+                aria-label="Open the full scheduled result screenshot"
+              >
+                <img
+                  loading="lazy"
+                  src="assets/submission/v0.2/report-complete.png"
+                  alt="The scheduled source review completed in the same Codex conversation"
+                />
+              </a>
+            </div>
+          </article>
+        </div>
+
+        <aside class="truth">
+          <div class="eyebrow">What Orkestr adds</div>
+          <h2>Codex is the intelligence. Orkestr is the operating layer.</h2>
+          <p>
+            Orkestr does not replace Codex and it is not a workflow-specific
+            bot. It packages the surrounding infrastructure into one local
+            product: persistent hosting, flexible inputs, a graphical desk,
+            WhatsApp routing, schedules, files, history, and human takeover.
+          </p>
+        </aside>
+      </section>
+
+      <section id="uses" class="uses shell">
+        <div class="section-heading">
+          <div class="eyebrow">Built for operational work</div>
+          <h2>Use the same loop wherever consistency matters.</h2>
+        </div>
+        <div class="uses-grid">
+          <div class="use">
+            <strong>Outreach</strong>
+            <span
+              >Research contacts, prepare follow-ups, and return drafts for
+              review.</span
+            >
+          </div>
+          <div class="use">
+            <strong>Job search</strong>
+            <span
+              >Review opportunities, prepare materials, and revisit the
+              pipeline.</span
+            >
+          </div>
+          <div class="use">
+            <strong>Messaging</strong>
+            <span
+              >Inspect unresolved threads and bring decisions back to the
+              human.</span
+            >
+          </div>
+          <div class="use">
+            <strong>Recurring checks</strong>
+            <span
+              >Inspect sites, reports, queues, or repositories on a
+              schedule.</span
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell">
+        <div class="eyebrow">Open source · Self-hosted</div>
+        <h2>Give Codex a workstation that stays on.</h2>
+        <p>
+          Orkestr Lite runs locally with Docker and uses your own Codex account.
+          The source, setup instructions, security boundary, and reproducible
+          demo are public.
+        </p>
+        <div class="actions">
+          <a
+            class="button primary"
+            href="https://github.com/otcan/orkestr-lite"
+            target="_blank"
+            rel="noreferrer"
+            >Explore Orkestr Lite on GitHub</a
+          >
+        </div>
+        <div class="fine-print">
+          Built for OpenAI Build Week. Screenshots are sanitized captures from a
+          real GPT-5.6 run. External services remain subject to their own
+          authentication and usage policies.
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
