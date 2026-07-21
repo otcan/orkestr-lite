@@ -62,3 +62,15 @@ test("refuses ambiguous container and filesystem-root reset targets", async () =
     );
   }
 });
+
+test("live acceptance waits for current Codex and WhatsApp readiness", async () => {
+  const runner = await readFile(
+    resolve(root, "demo/run-live-acceptance.mjs"),
+    "utf8",
+  );
+
+  assert.match(runner, /request\("\/api\/setup\/status"\)/);
+  assert.match(runner, /request\("\/api\/setup\/whatsapp\/status"\)/);
+  assert.match(runner, /latest\.ready && whatsapp\.ready/);
+  assert.doesNotMatch(runner, /firstMissionReady/);
+});

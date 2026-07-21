@@ -180,12 +180,16 @@ emit("demo.passed", evidence);
 async function waitForSetup() {
   let latest;
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    latest = await request("/api/setup/status");
-    if (latest.firstMissionReady) return latest;
+    const [setup, whatsapp] = await Promise.all([
+      request("/api/setup/status"),
+      request("/api/setup/whatsapp/status"),
+    ]);
+    latest = { ...setup, whatsapp };
+    if (latest.ready && whatsapp.ready) return latest;
     await delay(1_000);
   }
   throw new Error(
-    `Orkestr did not become ready: ${JSON.stringify(latest?.codex ?? {})}`,
+    `Orkestr did not become ready: ${JSON.stringify({ codex: latest?.codex, whatsapp: latest?.whatsapp })}`,
   );
 }
 
