@@ -83,7 +83,8 @@ visible Desk, accepts a follow-up from WhatsApp, returns the updated Markdown
 file, and runs a weekly review through the same conversation.
 
 The screenshots in `assets/submission/v0.2/` are sanitized captures from that
-run. [`demo.html`](../../demo.html) presents them as the public walkthrough.
+run. The [GitHub Pages site](https://otcan.github.io/orkestr-lite/) presents them
+through [`demo.html`](../../demo.html) as the public walkthrough.
 [`docs/DEMO.md`](../DEMO.md) contains the reproducible prompt and verification
 path. The owner-recorded video follows
 [`NARRATION.md`](NARRATION.md).

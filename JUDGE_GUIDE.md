@@ -4,7 +4,7 @@ Orkestr Lite is a self-hosted operating layer around Codex. It gives one Codex
 conversation a persistent workspace, an optional Ubuntu Desk, WhatsApp access,
 and flexible schedules.
 
-Start with the [screenshot walkthrough](demo.html). It shows the complete real
+Start with the [live product walkthrough](https://otcan.github.io/orkestr-lite/). It shows the complete real
 GPT-5.6 demonstration without requiring setup.
 
 ## Run the product

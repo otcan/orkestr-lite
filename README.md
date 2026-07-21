@@ -7,7 +7,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20AMD64-8ef0b5)
 [![OpenAI Build Week](https://img.shields.io/badge/OpenAI-Build%20Week-111827)](https://openai.devpost.com/)
 
-**[View the screenshot demo](demo.html)** · [Run it yourself](#quickstart) ·
+**[View the live product walkthrough](https://otcan.github.io/orkestr-lite/)** · [Run it yourself](#quickstart) ·
 [Judge guide](JUDGE_GUIDE.md)
 
 Codex can do serious agentic work. The unreliable part is everything around it:
