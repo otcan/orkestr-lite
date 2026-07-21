@@ -455,6 +455,13 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     const messageId =
       serializedId(message.id) || `${chatId}:${message.timestamp}`;
     if (!text && !message.hasMedia) return;
+    if (
+      message.fromMe &&
+      text &&
+      this.consumeMediaSendFailure(messageId, text)
+    ) {
+      return;
+    }
     if (text && this.consumeRecentOutboundText(text)) {
       const now = new Date().toISOString();
       this.database.db
@@ -870,6 +877,37 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       messageId ? "sent" : "sent_unconfirmed",
     );
     return messageId || null;
+  }
+
+  private consumeMediaSendFailure(messageId: string, text: string): boolean {
+    if (!/^Could not send the message(?::\s*.*)?$/i.test(text)) return false;
+    const cutoff = new Date(Date.now() - 60_000).toISOString();
+    const row = this.database.db
+      .prepare(
+        `SELECT id, attempt_count FROM whatsapp_outbox
+         WHERE kind = 'media' AND status IN ('sending', 'sent_unconfirmed')
+         AND updated_at >= ? ORDER BY updated_at DESC LIMIT 1`,
+      )
+      .get(cutoff) as { id: string; attempt_count: number } | undefined;
+    if (!row) return false;
+    const now = new Date().toISOString();
+    this.database.db
+      .prepare(
+        `UPDATE whatsapp_outbox SET status = 'failed', next_attempt_at = ?,
+         last_error = ?, updated_at = ? WHERE id = ?`,
+      )
+      .run(
+        new Date(
+          Date.now() + acknowledgementRetryDelay(row.attempt_count),
+        ).toISOString(),
+        text.slice(0, 500),
+        now,
+        row.id,
+      );
+    this.recordLegacyOutbound(messageId, null);
+    this.recordMessage(messageId, "outbound", null, "system", text, "failed");
+    this.publishStatus();
+    return true;
   }
 
   async sendFileToSelf(path: string): Promise<WhatsAppSnapshot> {
@@ -1337,7 +1375,10 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
             );
         } catch (error) {
           const attempt = row.attempt_count + 1;
-          const delay = Math.min(5 * 60_000, 5_000 * 2 ** Math.min(attempt, 6));
+          const delay =
+            row.kind === "media"
+              ? acknowledgementRetryDelay(attempt)
+              : Math.min(5 * 60_000, 5_000 * 2 ** Math.min(attempt, 6));
           this.database.db
             .prepare(
               `UPDATE whatsapp_outbox SET status = 'failed', next_attempt_at = ?,

@@ -9,7 +9,7 @@
     "dev": "node --watch --import tsx src/main.ts",
     "start": "node ../../dist/server/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test ../../dist/server/database/migrations.test.js ../../dist/server/desk-agent/chromium-profile.test.js ../../dist/server/missions/mission.repository.test.js ../../dist/server/missions/conversation-telemetry.service.test.js ../../dist/server/missions/missions.service.test.js ../../dist/server/missions/attachments.service.test.js ../../dist/server/missions/timers.service.test.js ../../dist/server/missions/workspace.service.test.js ../../dist/server/codex/codex.service.test.js ../../dist/server/whatsapp/whatsapp.service.test.js"
+    "test": "node --test ../../dist/server/database/migrations.test.js ../../dist/server/desk-agent/chromium-profile.test.js ../../dist/server/missions/mission.repository.test.js ../../dist/server/missions/conversation-telemetry.service.test.js ../../dist/server/missions/missions.service.test.js ../../dist/server/missions/attachments.service.test.js ../../dist/server/missions/timers.service.test.js ../../dist/server/missions/workspace.service.test.js ../../dist/server/codex/codex.service.test.js ../../dist/server/whatsapp/whatsapp-client.factory.test.js ../../dist/server/whatsapp/whatsapp.service.test.js"
   },
   "dependencies": {
     "@nestjs/common": "11.1.28",

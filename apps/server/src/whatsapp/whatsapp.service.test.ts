@@ -228,6 +228,25 @@ test("linked-device QR routes self messages into the shared conversation", async
       (service.outbox(100, true)[0] as { status: string }).status,
       "acknowledged",
     );
+    const inputCountBeforeFailure = createdInputs.length;
+    await service.sendFileToSelf(validFile);
+    await settle();
+    client.emitMessage({
+      id: { _serialized: "file-failed", remote: "123456789@lid" },
+      fromMe: true,
+      to: "123456789@lid",
+      body: "Could not send the message: r",
+    });
+    await settle();
+    assert.equal(createdInputs.length, inputCountBeforeFailure);
+    const failedMedia = service
+      .outbox()
+      .find((item) => (item as { kind: string }).kind === "media") as {
+      status: string;
+      lastError: string;
+    };
+    assert.equal(failedMedia.status, "failed");
+    assert.equal(failedMedia.lastError, "Could not send the message: r");
     const disallowedFile = join(home, "private.txt");
     writeFileSync(disallowedFile, "private");
     await assert.rejects(
