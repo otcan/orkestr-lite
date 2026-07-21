@@ -74,3 +74,16 @@ test("live acceptance waits for current Codex and WhatsApp readiness", async () 
   assert.match(runner, /latest\.ready && whatsapp\.ready/);
   assert.doesNotMatch(runner, /firstMissionReady/);
 });
+
+test("control and Desk share only the attachment data subtree", async () => {
+  const compose = await readFile(resolve(root, "compose.yaml"), "utf8");
+
+  assert.equal(
+    (compose.match(/orkestr-attachments:\/data\/attachments/g) || []).length,
+    2,
+  );
+  assert.match(compose, /^  orkestr-attachments:$/m);
+
+  const desk = compose.split(/^  orkestr-desk:$/m)[1] ?? "";
+  assert.doesNotMatch(desk, /^\s+- orkestr-data:\/data$/m);
+});
